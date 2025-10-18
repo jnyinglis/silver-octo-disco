@@ -68,18 +68,18 @@ npm run test
 ## 🌐 Deploying to GitHub Pages
 
 1. Make sure `vite.config.ts` uses the correct base path for your repository (e.g. `base: '/your-repo/'`).
-2. Build the project locally:
+2. Build the project locally using the dedicated mode (this writes the production assets to `docs/` and adds a `.nojekyll` file):
    ```bash
-   npm run build
+   npm run build:gh-pages
    ```
-3. Push the `dist/` folder to the `gh-pages` branch. A simple approach is:
+3. Push the `docs/` folder to the `gh-pages` branch (or keep it on `main` if you're serving Pages from there). A simple approach is:
    ```bash
-   git worktree add dist gh-pages
-   npm run build
-   cd dist && git add --all && git commit -m "Deploy" && git push origin gh-pages
-   git worktree remove dist
+   git worktree add docs gh-pages
+   npm run build:gh-pages
+   cd docs && git add --all && git commit -m "Deploy" && git push origin gh-pages
+   git worktree remove docs
    ```
-   or use any GitHub Actions workflow that publishes the `dist/` directory.
+   or use any GitHub Actions workflow that publishes the `docs/` directory.
 4. Enable GitHub Pages for the repository (`Settings › Pages`) and point it to the `gh-pages` branch.
 
 ## ➕ Adding new cards
