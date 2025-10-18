@@ -1,0 +1,62 @@
+{
+  "users": [
+    {
+      "id": "user-1",
+      "fullName": "Alice Johnson",
+      "department": "Engineering",
+      "role": "Senior Developer",
+      "location": "Austin"
+    },
+    {
+      "id": "user-2",
+      "fullName": "Benjamin Ortiz",
+      "department": "Security",
+      "role": "Security Analyst",
+      "location": "Denver"
+    }
+  ],
+  "courses": [
+    {
+      "id": "course-1",
+      "title": "Security Essentials 1",
+      "category": "Security",
+      "difficulty": "Intermediate",
+      "hours": 6
+    },
+    {
+      "id": "course-2",
+      "title": "Leadership Essentials 1",
+      "category": "Leadership",
+      "difficulty": "Beginner",
+      "hours": 4
+    }
+  ],
+  "proctors": [
+    {
+      "id": "proctor-1",
+      "fullName": "Olivia Roberts",
+      "location": "Remote"
+    }
+  ],
+  "enrollments": [
+    {
+      "id": "enroll-1",
+      "userId": "user-1",
+      "courseId": "course-1",
+      "proctorId": "proctor-1",
+      "status": "completed",
+      "score": 91,
+      "completedAt": "2024-03-01T00:00:00.000Z",
+      "hoursSpent": 5.5
+    },
+    {
+      "id": "enroll-2",
+      "userId": "user-2",
+      "courseId": "course-2",
+      "proctorId": "proctor-1",
+      "status": "in-progress",
+      "score": 62,
+      "hoursSpent": 2.5
+    }
+  ]
+}
