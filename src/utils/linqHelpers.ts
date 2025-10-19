@@ -1,11 +1,5 @@
 import Enumerable from 'linq';
-import type {
-  DashboardFilters,
-  Enrollment,
-  MiniDatabase,
-  QueryContext,
-  QueryLookups
-} from '@/types/dashboard';
+import type { DashboardFilters, Enrollment, MiniDatabase, QueryContext, QueryLookups } from '@/types/dashboard';
 
 export const createLookups = (data: MiniDatabase): QueryLookups => ({
   usersById: new Map(data.users.map((user) => [user.id, user])),
@@ -65,15 +59,3 @@ export const formatNumber = (value: number): string => value.toLocaleString();
 
 export const formatHours = (value: number): string => `${value.toFixed(1)} hrs`;
 
-export const average = (values: Enumerable.IEnumerable<number>): number => {
-  const result = values.aggregate(
-    { sum: 0, count: 0 },
-    (acc, current) => ({ sum: acc.sum + current, count: acc.count + 1 })
-  );
-  return result.count === 0 ? 0 : Number((result.sum / result.count).toFixed(1));
-};
-
-export const sum = (values: Enumerable.IEnumerable<number>): number => values.sum((n) => n);
-
-export const sortDescending = <T>(query: Enumerable.IEnumerable<T>, selector: (item: T) => number) =>
-  query.orderByDescending(selector);
