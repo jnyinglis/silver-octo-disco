@@ -1,7 +1,7 @@
 <template>
   <div class="app-shell">
     <header class="app-header">
-      <h1>SkillTrack Dashboard POC</h1>
+      <h1>Dashboard POC</h1>
       <p class="tagline">Config-driven LINQ-powered analytics — Vue 3 + TypeScript</p>
     </header>
     <main class="app-main">

@@ -1,4 +1,4 @@
-# SkillTrack Dashboard POC
+# Dashboard POC
 
 An interactive, config-driven dashboard proof-of-concept built with **Vue 3 + TypeScript**. The experience runs entirely in the browser, keeps a mock "mini-database" in memory, and uses the [`linq`](https://www.npmjs.com/package/linq) package to perform LINQ-style aggregations for each card.
 
