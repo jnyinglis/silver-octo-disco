@@ -9,7 +9,13 @@ function runFilteredQuery(ctx: QueryContext, spec: QuerySpec): Row[] {
   const filterCtx = toFilterContext(ctx.filters);
   const queryWithFilters: QuerySpec = {
     ...spec,
-    where: filterCtx ?? spec.where,
+    where:
+      filterCtx || spec.where
+        ? {
+            ...(spec.where ?? {}),
+            ...(filterCtx ?? {}),
+          }
+        : undefined,
   };
   return ctx.engine.runQuery(queryWithFilters);
 }
@@ -54,37 +60,33 @@ export const cardConfigs: CardConfig[] = [
       };
     },
     detailQuery: (ctx) => {
-      const { lookups, data, filters } = ctx;
+      const rows = runFilteredQuery(ctx, {
+        dimensions: [
+          'enrollmentId',
+          'userFullName',
+          'department',
+          'courseTitle',
+          'status',
+          'completedAt',
+          'score',
+        ],
+        metrics: ['total_enrollments'],
+        where: { status: 'completed' },
+      });
 
-      // For detail queries, we still need to work with the raw data
-      // since we need to show individual enrollment rows
-      let enrollments = data.enrollments.filter((e) => e.status === 'completed');
-
-      // Apply filters
-      if (filters.status && filters.status !== 'all') {
-        enrollments = enrollments.filter((e) => e.status === filters.status);
-      }
-      if (filters.department) {
-        enrollments = enrollments.filter((e) =>
-          lookups.usersById.get(e.userId)?.department === filters.department
-        );
-      }
-      if (filters.courseCategory) {
-        enrollments = enrollments.filter((e) =>
-          lookups.coursesById.get(e.courseId)?.category === filters.courseCategory
-        );
-      }
-
-      return enrollments
-        .sort((a, b) => (b.completedAt ?? '').localeCompare(a.completedAt ?? ''))
+      return rows
+        .map((row) => ({
+          Learner: (row.userFullName as string) ?? 'Unknown',
+          Department: (row.department as string) ?? 'N/A',
+          Course: (row.courseTitle as string) ?? 'Unknown',
+          Score: row.score as number,
+          Completed: row.completedAt
+            ? new Date(String(row.completedAt)).toLocaleDateString()
+            : '—',
+        }))
+        .sort((a, b) => String(b.Completed).localeCompare(String(a.Completed)))
         .slice(0, 15)
-        .map((enrollment) => ({
-          Learner: lookups.usersById.get(enrollment.userId)?.fullName ?? 'Unknown',
-          Department: lookups.usersById.get(enrollment.userId)?.department ?? 'N/A',
-          Course: lookups.coursesById.get(enrollment.courseId)?.title ?? 'Unknown',
-          Score: enrollment.score,
-          Completed: enrollment.completedAt ? new Date(enrollment.completedAt).toLocaleDateString() : '—'
-        }));
+        .filter((row) => row.Learner);
     },
     filters: [
       { key: 'department', label: 'Department' },
@@ -117,40 +119,34 @@ export const cardConfigs: CardConfig[] = [
       };
     },
     detailQuery: (ctx) => {
-      const { lookups, data, filters } = ctx;
-
-      // Filter enrollments to exclude in-progress (original behavior)
-      let enrollments = data.enrollments.filter((e) => e.status !== 'in-progress');
-
-      // Apply dashboard filters
-      if (filters.status && filters.status !== 'all') {
-        enrollments = enrollments.filter((e) => e.status === filters.status);
-      }
-      if (filters.department) {
-        enrollments = enrollments.filter((e) =>
-          lookups.usersById.get(e.userId)?.department === filters.department
-        );
-      }
-
-      // Group by department
-      const deptData: Record<string, { totalScore: number; count: number; completions: number }> = {};
-      enrollments.forEach((e) => {
-        const dept = lookups.usersById.get(e.userId)?.department ?? 'Unknown';
-        if (!deptData[dept]) {
-          deptData[dept] = { totalScore: 0, count: 0, completions: 0 };
-        }
-        deptData[dept].totalScore += e.score;
-        deptData[dept].count++;
-        if (e.status === 'completed') {
-          deptData[dept].completions++;
-        }
+      const rows = runFilteredQuery(ctx, {
+        dimensions: ['department', 'status'],
+        metrics: ['avg_score', 'total_enrollments'],
       });
+
+      const deptData: Record<string, { totalScore: number; count: number; completions: number }> = {};
+
+      rows
+        .filter((row) => row.status !== 'in-progress')
+        .forEach((row) => {
+          const dept = (row.department as string) ?? 'Unknown';
+          if (!deptData[dept]) {
+            deptData[dept] = { totalScore: 0, count: 0, completions: 0 };
+          }
+          const enrollments = row.total_enrollments as number;
+          const avgScore = row.avg_score as number;
+          deptData[dept].totalScore += avgScore * enrollments;
+          deptData[dept].count += enrollments;
+          if (row.status === 'completed') {
+            deptData[dept].completions += enrollments;
+          }
+        });
 
       return Object.entries(deptData)
         .map(([dept, data]) => ({
           Department: dept,
           AverageScore: data.count > 0 ? formatScore(data.totalScore / data.count) : 0,
-          Completions: data.completions
+          Completions: data.completions,
         }))
         .sort((a, b) => (b.AverageScore as number) - (a.AverageScore as number));
     },
@@ -258,38 +254,27 @@ export const cardConfigs: CardConfig[] = [
       };
     },
     detailQuery: (ctx) => {
-      const { lookups, data, filters } = ctx;
+      const rows = runFilteredQuery(ctx, {
+        dimensions: [
+          'enrollmentId',
+          'userFullName',
+          'courseTitle',
+          'status',
+          'hoursSpent',
+          'courseHours',
+        ],
+        metrics: ['total_hours_spent'],
+      });
 
-      // For detail queries, work with raw enrollment data joined with courses
-      let enrollments = [...data.enrollments];
-
-      // Apply filters
-      if (filters.status && filters.status !== 'all') {
-        enrollments = enrollments.filter((e) => e.status === filters.status);
-      }
-      if (filters.department) {
-        enrollments = enrollments.filter((e) =>
-          lookups.usersById.get(e.userId)?.department === filters.department
-        );
-      }
-      if (filters.courseCategory) {
-        enrollments = enrollments.filter((e) =>
-          lookups.coursesById.get(e.courseId)?.category === filters.courseCategory
-        );
-      }
-
-      return enrollments
-        .map((enrollment) => {
-          const course = lookups.coursesById.get(enrollment.courseId);
-          return {
-            Learner: lookups.usersById.get(enrollment.userId)?.fullName ?? 'Unknown',
-            Course: course?.title ?? 'Unknown',
-            Status: enrollment.status,
-            HoursSpent: Number(enrollment.hoursSpent.toFixed(1)),
-            PlannedHours: course?.hours ?? 0
-          };
-        })
-        .sort((a, b) => b.HoursSpent - a.HoursSpent)
+      return rows
+        .map((row) => ({
+          Learner: (row.userFullName as string) ?? 'Unknown',
+          Course: (row.courseTitle as string) ?? 'Unknown',
+          Status: row.status as string,
+          HoursSpent: Number((row.hoursSpent as number).toFixed(1)),
+          PlannedHours: row.courseHours as number,
+        }))
+        .sort((a, b) => (b.HoursSpent as number) - (a.HoursSpent as number))
         .slice(0, 15);
     },
     filters: [
