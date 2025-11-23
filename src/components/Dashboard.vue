@@ -113,13 +113,33 @@ const activeCardId = ref<string | null>(null);
 
 const isLoaded = computed(() => data.value !== null);
 
-const availableDepartments = computed(() =>
-  data.value ? Array.from(new Set(data.value.users.map((user) => user.department))).sort() : []
-);
+const context = computed(() => (data.value ? createQueryContext(data.value, filters) : null));
 
-const availableCategories = computed(() =>
-  data.value ? Array.from(new Set(data.value.courses.map((course) => course.category))).sort() : []
-);
+const availableDepartments = computed(() => {
+  if (!context.value) return [];
+  const rows = context.value.engine.runQuery({
+    dimensions: ['department'],
+    metrics: ['total_enrollments']
+  });
+
+  return rows
+    .map((row) => row.department as string)
+    .filter(Boolean)
+    .sort();
+});
+
+const availableCategories = computed(() => {
+  if (!context.value) return [];
+  const rows = context.value.engine.runQuery({
+    dimensions: ['category'],
+    metrics: ['total_enrollments']
+  });
+
+  return rows
+    .map((row) => row.category as string)
+    .filter(Boolean)
+    .sort();
+});
 
 watch(availableDepartments, (departments) => {
   if (filters.department && !departments.includes(filters.department)) {
@@ -132,8 +152,6 @@ watch(availableCategories, (categories) => {
     filters.courseCategory = undefined;
   }
 });
-
-const context = computed(() => (data.value ? createQueryContext(data.value, filters) : null));
 
 const summaries = computed(() => {
   if (!context.value) {
