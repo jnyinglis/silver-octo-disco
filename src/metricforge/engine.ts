@@ -1,12 +1,14 @@
 import {
   SemanticEngine,
-  InMemoryDb,
-  QuerySpec,
-  Row,
   f,
   aggregateMetric,
   buildMetricFromExpr,
   Expr,
+} from 'metricforge/src/semanticEngine';
+import type {
+  InMemoryDb,
+  QuerySpec,
+  Row,
 } from 'metricforge/src/semanticEngine';
 import { dashboardSchema } from './schema';
 import type { MiniDatabase, DashboardFilters } from '@/types/dashboard';
@@ -139,12 +141,10 @@ export function runQuery<T extends Row = Row>(
  */
 export {
   SemanticEngine,
-  QuerySpec,
-  Row,
   f,
   Expr,
   aggregateMetric,
   buildMetricFromExpr,
 };
 
-export type { InMemoryDb };
+export type { InMemoryDb, QuerySpec, Row };
