@@ -1,4 +1,4 @@
-import type { Enumerable } from 'linq';
+import type { SemanticEngine, Row } from 'metricforge/src/semanticEngine';
 
 export interface User {
   id: string;
@@ -68,7 +68,7 @@ export interface QueryContext {
   data: MiniDatabase;
   filters: DashboardFilters;
   lookups: QueryLookups;
-  Enumerable: typeof Enumerable;
+  engine: SemanticEngine;
 }
 
 export interface CardSummaryResult {
