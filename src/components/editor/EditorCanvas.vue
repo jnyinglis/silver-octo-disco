@@ -14,9 +14,16 @@
         :tile="tile"
         :mode="mode"
         :style="getTileStyle(tile)"
-        @select="selectTile(tile.id)"
+        @select="handleTileClick(tile)"
       />
     </template>
+
+    <!-- Detail View Modal -->
+    <DetailViewModal
+      v-if="detailViewTile"
+      :tile="detailViewTile"
+      @close="closeDetailView"
+    />
 
     <!-- Edit Mode: Use simple tile display -->
     <template v-else>
@@ -74,9 +81,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { useSharedEditorState } from '@/composables/useEditorState';
 import TileRenderer from './TileRenderer.vue';
+import DetailViewModal from './DetailViewModal.vue';
 import type { TileConfig } from '@/types/dashboardSchema';
 import type { CardTemplate } from '@/services/editorPalette';
 import TileRenderer from './TileRenderer.vue';
@@ -102,6 +110,21 @@ const {
   duplicateTile,
   palette,
 } = useSharedEditorState();
+
+// Detail view modal state
+const detailViewTile = ref<TileConfig | null>(null);
+
+function handleTileClick(tile: TileConfig) {
+  if (props.mode === 'preview' && tile.detailView) {
+    detailViewTile.value = tile;
+  } else {
+    selectTile(tile.id);
+  }
+}
+
+function closeDetailView() {
+  detailViewTile.value = null;
+}
 
 const gridStyle = computed(() => ({
   gridTemplateColumns: `repeat(${dashboard.value.layout?.columns ?? 12}, 1fr)`,

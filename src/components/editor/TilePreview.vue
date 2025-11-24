@@ -75,7 +75,7 @@ import { generateFakeDatabase } from '@/utils/fakeDataGenerator';
 import { createDashboardEngine } from '@/metricforge';
 import type { Row } from 'metricforge/src/semanticEngine';
 
-const { selectedTile } = useSharedEditorState();
+const { selectedTile, globalFilters } = useSharedEditorState();
 
 const loading = ref(false);
 const error = ref<string | null>(null);
@@ -110,10 +110,23 @@ async function refresh() {
       return;
     }
 
+    // Merge applied filters into where clause
+    const mergedWhere = { ...(query.where ?? {}) };
+
+    if (selectedTile.value.appliedFilters) {
+      selectedTile.value.appliedFilters.forEach((filterKey) => {
+        const filterValue = globalFilters.value[filterKey];
+        // Only inject if filter has a non-empty value and isn't 'all'
+        if (filterValue && filterValue !== 'all' && filterValue !== '') {
+          mergedWhere[filterKey] = filterValue;
+        }
+      });
+    }
+
     const spec = {
       metrics: query.metrics,
       dimensions: query.dimensions,
-      where: query.where,
+      where: mergedWhere,
     };
 
     let results = engine.runQuery(spec);
