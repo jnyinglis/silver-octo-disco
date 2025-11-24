@@ -34,52 +34,110 @@
         </div>
       </section>
 
-      <!-- Query Binding -->
+      <!-- Query Configuration -->
       <section class="config-panel__section">
-        <h4 class="config-panel__section-title">Query Binding</h4>
+        <h4 class="config-panel__section-title">Query Configuration</h4>
 
-        <MetricPicker
-          :model-value="selectedTile.query.metrics"
-          :recommended-metrics="currentTemplate?.recommendedMetrics ?? []"
-          @update:model-value="updateQuery('metrics', $event)"
-        />
-
-        <DimensionPicker
-          :model-value="selectedTile.query.dimensions ?? []"
-          :recommended-dimensions="currentTemplate?.recommendedDimensions ?? []"
-          @update:model-value="updateQuery('dimensions', $event)"
-        />
-
-        <!-- Transforms -->
+        <!-- Query Mode Switcher -->
         <div class="config-panel__field">
-          <label>Context Transforms</label>
-          <div class="config-panel__checkboxes">
-            <label
-              v-for="transform in availableTransforms"
-              :key="transform"
-              class="config-panel__checkbox"
+          <label>Query Mode</label>
+          <div class="config-panel__mode-switch">
+            <button
+              type="button"
+              class="config-panel__mode-btn"
+              :class="{ 'config-panel__mode-btn--active': currentQueryMode === 'builder' }"
+              @click="switchQueryMode('builder')"
             >
-              <input
-                type="checkbox"
-                :checked="(selectedTile.query.transforms ?? []).includes(transform)"
-                @change="toggleTransform(transform)"
-              />
-              {{ transform }}
-            </label>
+              Visual Builder
+            </button>
+            <button
+              type="button"
+              class="config-panel__mode-btn"
+              :class="{ 'config-panel__mode-btn--active': currentQueryMode === 'dsl' }"
+              @click="switchQueryMode('dsl')"
+            >
+              DSL Query
+            </button>
           </div>
         </div>
 
-        <!-- Limit -->
-        <div class="config-panel__field">
-          <label>Limit</label>
-          <input
-            type="number"
-            :value="selectedTile.query.limit"
-            placeholder="No limit"
-            min="1"
-            @input="updateQuery('limit', parseLimit(($event.target as HTMLInputElement).value))"
+        <!-- Visual Builder Mode -->
+        <template v-if="currentQueryMode === 'builder'">
+          <MetricPicker
+            :model-value="selectedTile.query?.metrics ?? []"
+            :recommended-metrics="currentTemplate?.recommendedMetrics ?? []"
+            @update:model-value="updateQuery('metrics', $event)"
           />
-        </div>
+
+          <DimensionPicker
+            :model-value="selectedTile.query?.dimensions ?? []"
+            :recommended-dimensions="currentTemplate?.recommendedDimensions ?? []"
+            @update:model-value="updateQuery('dimensions', $event)"
+          />
+
+          <!-- Transforms -->
+          <div class="config-panel__field">
+            <label>Context Transforms</label>
+            <div class="config-panel__checkboxes">
+              <label
+                v-for="transform in availableTransforms"
+                :key="transform"
+                class="config-panel__checkbox"
+              >
+                <input
+                  type="checkbox"
+                  :checked="(selectedTile.query?.transforms ?? []).includes(transform)"
+                  @change="toggleTransform(transform)"
+                />
+                {{ transform }}
+              </label>
+            </div>
+          </div>
+
+          <!-- Limit -->
+          <div class="config-panel__field">
+            <label>Limit</label>
+            <input
+              type="number"
+              :value="selectedTile.query?.limit"
+              placeholder="No limit"
+              min="1"
+              @input="updateQuery('limit', parseLimit(($event.target as HTMLInputElement).value))"
+            />
+          </div>
+        </template>
+
+        <!-- DSL Mode -->
+        <template v-else>
+          <div class="config-panel__field">
+            <label>Query DSL</label>
+            <textarea
+              class="config-panel__dsl-editor"
+              :value="selectedTile.dslConfig?.queryString ?? ''"
+              @input="updateDSLQuery(($event.target as HTMLTextAreaElement).value)"
+              placeholder="metrics: total_enrollments&#10;dimensions: department, status&#10;where: status == :status"
+              rows="8"
+            ></textarea>
+            <small class="config-panel__hint">
+              Query will be auto-wrapped in: query tile_{{ selectedTile.id }} { ... }
+            </small>
+          </div>
+
+          <!-- DSL Parameters -->
+          <div class="config-panel__field">
+            <label>Parameters (JSON)</label>
+            <textarea
+              class="config-panel__params-editor"
+              :value="dslParametersJson"
+              @input="updateDSLParameters(($event.target as HTMLTextAreaElement).value)"
+              placeholder='{ "status": "completed" }'
+              rows="3"
+            ></textarea>
+            <small class="config-panel__hint">
+              Values for :param placeholders in query
+            </small>
+          </div>
+        </template>
       </section>
 
       <!-- KPI Display Configuration (only for KPI tiles) -->
@@ -255,6 +313,16 @@ const tileErrors = computed(() => {
   );
 });
 
+const currentQueryMode = computed(() => {
+  return selectedTile.value?.queryMode ?? 'builder';
+});
+
+const dslParametersJson = computed(() => {
+  const params = selectedTile.value?.dslConfig?.parameters;
+  if (!params || Object.keys(params).length === 0) return '';
+  return JSON.stringify(params, null, 2);
+});
+
 function updateField<K extends keyof TileConfig>(field: K, value: TileConfig[K]) {
   if (!selectedTileId.value) return;
   updateTile(selectedTileId.value, { [field]: value });
@@ -318,7 +386,7 @@ function toggleSecondaryKPI() {
     });
   } else {
     // Add secondary KPI with second metric if available
-    const secondMetric = selectedTile.value.query.metrics[1];
+    const secondMetric = selectedTile.value.query?.metrics[1];
     updateTile(selectedTileId.value, {
       kpiDisplay: {
         ...currentKPI,
@@ -326,6 +394,33 @@ function toggleSecondaryKPI() {
         secondaryFormat: 'number',
       },
     });
+  }
+}
+
+function switchQueryMode(mode: 'builder' | 'dsl') {
+  if (!selectedTileId.value) return;
+  updateTile(selectedTileId.value, { queryMode: mode });
+}
+
+function updateDSLQuery(queryString: string) {
+  if (!selectedTileId.value || !selectedTile.value) return;
+  const currentDSL = selectedTile.value.dslConfig ?? {};
+  updateTile(selectedTileId.value, {
+    dslConfig: { ...currentDSL, queryString },
+  });
+}
+
+function updateDSLParameters(jsonString: string) {
+  if (!selectedTileId.value || !selectedTile.value) return;
+  try {
+    const parameters = jsonString.trim() ? JSON.parse(jsonString) : {};
+    const currentDSL = selectedTile.value.dslConfig ?? { queryString: '' };
+    updateTile(selectedTileId.value, {
+      dslConfig: { ...currentDSL, parameters },
+    });
+  } catch (e) {
+    // Invalid JSON - ignore for now, user is still typing
+    console.warn('Invalid JSON parameters:', e);
   }
 }
 </script>
@@ -462,5 +557,65 @@ function toggleSecondaryKPI() {
 
 .config-panel__errors li {
   margin-bottom: 0.25rem;
+}
+
+/* Query Mode Switcher */
+.config-panel__mode-switch {
+  display: flex;
+  background: #f3f4f6;
+  border-radius: 0.5rem;
+  padding: 0.25rem;
+  gap: 0.25rem;
+}
+
+.config-panel__mode-btn {
+  flex: 1;
+  padding: 0.5rem 0.75rem;
+  border: none;
+  background: transparent;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: #6b7280;
+  transition: all 0.15s;
+}
+
+.config-panel__mode-btn:hover {
+  color: #374151;
+}
+
+.config-panel__mode-btn--active {
+  background: white;
+  color: #1f2937;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* DSL Editor */
+.config-panel__dsl-editor,
+.config-panel__params-editor {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  font-family: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, 'DejaVu Sans Mono', monospace;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.config-panel__dsl-editor:focus,
+.config-panel__params-editor:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+.config-panel__hint {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.6875rem;
+  color: #9ca3af;
+  font-style: italic;
 }
 </style>
