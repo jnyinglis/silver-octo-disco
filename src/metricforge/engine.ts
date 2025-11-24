@@ -13,6 +13,103 @@ import type {
 import { dashboardSchema } from './schema';
 import type { MiniDatabase, DashboardFilters } from '@/types/dashboard';
 
+export interface MetricDefinition {
+  name: string;
+  label: string;
+  description: string;
+  baseFact: string;
+  format?: 'integer' | 'hours' | 'percentage' | 'score' | 'ratio';
+  kind: 'count' | 'sum' | 'avg' | 'expression';
+  sourceAttribute?: string;
+  buildExpr?: () => ReturnType<typeof Expr.metric> | ReturnType<typeof Expr.div>;
+}
+
+export interface DimensionDefinition {
+  name: string;
+  label: string;
+  table: string;
+}
+
+export interface SemanticIntrospection {
+  metrics: MetricDefinition[];
+  dimensions: DimensionDefinition[];
+  facts: string[];
+  attributes: string[];
+  contextTransforms: string[];
+}
+
+const metricDefinitions: MetricDefinition[] = [
+  {
+    name: 'total_enrollments',
+    label: 'Total enrollments',
+    description: 'Count of enrollment rows across the fact table.',
+    baseFact: 'fact_enrollments',
+    kind: 'count',
+    format: 'integer',
+  },
+  {
+    name: 'total_score',
+    label: 'Total score',
+    description: 'Sum of learner scores.',
+    baseFact: 'fact_enrollments',
+    kind: 'sum',
+    sourceAttribute: 'score',
+    format: 'integer',
+  },
+  {
+    name: 'avg_score',
+    label: 'Average score',
+    description: 'Average assessment score across enrollments.',
+    baseFact: 'fact_enrollments',
+    kind: 'avg',
+    sourceAttribute: 'score',
+    format: 'score',
+  },
+  {
+    name: 'total_hours_spent',
+    label: 'Hours spent',
+    description: 'Total time spent on courses by learners.',
+    baseFact: 'fact_enrollments',
+    kind: 'sum',
+    sourceAttribute: 'hoursSpent',
+    format: 'hours',
+  },
+  {
+    name: 'total_planned_hours',
+    label: 'Planned hours',
+    description: 'Sum of planned course duration for enrollments.',
+    baseFact: 'fact_enrollments',
+    kind: 'sum',
+    sourceAttribute: 'courseHours',
+    format: 'hours',
+  },
+  {
+    name: 'hour_utilization',
+    label: 'Hour utilization',
+    description: 'Ratio of actual hours spent vs planned.',
+    baseFact: 'fact_enrollments',
+    kind: 'expression',
+    buildExpr: () => Expr.div(Expr.metric('total_hours_spent'), Expr.metric('total_planned_hours')),
+    format: 'ratio',
+  },
+];
+
+const toTitleCase = (value: string): string =>
+  value
+    .replace(/([A-Z])/g, ' $1')
+    .replace(/[_-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/^[a-z]/, (m) => m.toUpperCase());
+
+const dimensionDefinitions: DimensionDefinition[] = Object.keys(dashboardSchema.attributes).map(
+  (attribute) => ({
+    name: attribute,
+    label: toTitleCase(attribute),
+    table: dashboardSchema.attributes[attribute]?.table ?? 'unknown',
+  })
+);
+
 /**
  * Convert the dashboard's MiniDatabase format to MetricForge's InMemoryDb format.
  * Maps the domain tables to the semantic layer naming convention.
@@ -37,44 +134,7 @@ export function createDashboardEngine(data: MiniDatabase): SemanticEngine {
 
   const engine = SemanticEngine.fromSchema(dashboardSchema, db);
 
-  // Register all metrics programmatically for better control
-
-  // Total enrollments count - use count(*) pattern for row counting
-  engine.registerMetric(
-    buildMetricFromExpr({
-      name: 'total_enrollments',
-      baseFact: 'fact_enrollments',
-      expr: Expr.count('*'),
-    })
-  );
-
-  // Score metrics - use numeric attributes
-  engine.registerMetric(
-    aggregateMetric('total_score', 'fact_enrollments', 'score', 'sum')
-  );
-
-  engine.registerMetric(
-    aggregateMetric('avg_score', 'fact_enrollments', 'score', 'avg')
-  );
-
-  // Hours metrics
-  engine.registerMetric(
-    aggregateMetric('total_hours_spent', 'fact_enrollments', 'hoursSpent', 'sum')
-  );
-
-  // Total planned hours - this sums courseHours from the joined course dimension
-  engine.registerMetric(
-    aggregateMetric('total_planned_hours', 'fact_enrollments', 'courseHours', 'sum')
-  );
-
-  // Hour utilization (derived)
-  engine.registerMetric(
-    buildMetricFromExpr({
-      name: 'hour_utilization',
-      baseFact: 'fact_enrollments',
-      expr: Expr.div(Expr.metric('total_hours_spent'), Expr.metric('total_planned_hours')),
-    })
-  );
+  metricDefinitions.forEach((definition) => registerMetric(engine, definition));
 
   return engine;
 }
@@ -148,3 +208,54 @@ export {
 };
 
 export type { InMemoryDb, QuerySpec, Row };
+
+function registerMetric(engine: SemanticEngine, metric: MetricDefinition): void {
+  if (metric.kind === 'count') {
+    engine.registerMetric(
+      buildMetricFromExpr({
+        name: metric.name,
+        baseFact: metric.baseFact,
+        expr: Expr.count('*'),
+      })
+    );
+    return;
+  }
+
+  if (metric.kind === 'sum' || metric.kind === 'avg') {
+    if (!metric.sourceAttribute) {
+      throw new Error(`Metric ${metric.name} is missing a sourceAttribute.`);
+    }
+    engine.registerMetric(
+      aggregateMetric(
+        metric.name,
+        metric.baseFact,
+        metric.sourceAttribute,
+        metric.kind
+      )
+    );
+    return;
+  }
+
+  if (metric.kind === 'expression') {
+    engine.registerMetric(
+      buildMetricFromExpr({
+        name: metric.name,
+        baseFact: metric.baseFact,
+        expr: metric.buildExpr?.() ?? Expr.metric(metric.name),
+      })
+    );
+  }
+}
+
+export function introspectSemanticModel(): SemanticIntrospection {
+  return {
+    metrics: metricDefinitions,
+    dimensions: dimensionDefinitions,
+    facts: Object.keys(dashboardSchema.facts),
+    attributes: Object.keys(dashboardSchema.attributes),
+    contextTransforms: ['ytd', 'lastYear', 'rolling30d'],
+  };
+}
+
+export const semanticMetricCatalog = metricDefinitions;
+export const semanticDimensionCatalog = dimensionDefinitions;
