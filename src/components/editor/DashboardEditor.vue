@@ -90,10 +90,31 @@
         <EditorCanvas />
       </div>
 
-      <!-- Right: Config Panel + Preview -->
+      <!-- Right: Config Panel + Preview/Plan -->
       <div class="editor-main__sidebar">
         <TileConfigPanel />
-        <TilePreview />
+
+        <!-- Sidebar Tab Switcher -->
+        <div class="sidebar-tabs">
+          <button
+            class="sidebar-tabs__btn"
+            :class="{ 'sidebar-tabs__btn--active': sidebarTab === 'preview' }"
+            @click="sidebarTab = 'preview'"
+          >
+            Preview
+          </button>
+          <button
+            class="sidebar-tabs__btn"
+            :class="{ 'sidebar-tabs__btn--active': sidebarTab === 'plan' }"
+            @click="sidebarTab = 'plan'"
+          >
+            Logical Plan
+          </button>
+        </div>
+
+        <!-- Tab Content -->
+        <TilePreview v-if="sidebarTab === 'preview'" />
+        <LogicalPlanVisualizer v-else />
       </div>
     </div>
 
@@ -128,6 +149,7 @@ import TilePalette from './TilePalette.vue';
 import EditorCanvas from './EditorCanvas.vue';
 import TileConfigPanel from './TileConfigPanel.vue';
 import TilePreview from './TilePreview.vue';
+import LogicalPlanVisualizer from './LogicalPlanVisualizer.vue';
 
 const {
   dashboard,
@@ -145,6 +167,7 @@ const {
 } = useSharedEditorState();
 
 const mode = ref<'edit' | 'preview'>('edit');
+const sidebarTab = ref<'preview' | 'plan'>('preview');
 const showImport = ref(false);
 const importJson = ref('');
 
@@ -405,5 +428,37 @@ function onPublish() {
   background: #2563eb !important;
   border-color: #2563eb !important;
   color: white;
+}
+
+/* Sidebar Tab Switcher */
+.sidebar-tabs {
+  display: flex;
+  background: #f3f4f6;
+  border-radius: 0.5rem;
+  padding: 0.25rem;
+  gap: 0.25rem;
+}
+
+.sidebar-tabs__btn {
+  flex: 1;
+  padding: 0.5rem 0.75rem;
+  border: none;
+  background: transparent;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: #6b7280;
+  transition: all 0.15s;
+}
+
+.sidebar-tabs__btn:hover {
+  color: #374151;
+}
+
+.sidebar-tabs__btn--active {
+  background: white;
+  color: #1f2937;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 </style>

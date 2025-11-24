@@ -259,3 +259,17 @@ export function introspectSemanticModel(): SemanticIntrospection {
 
 export const semanticMetricCatalog = metricDefinitions;
 export const semanticDimensionCatalog = dimensionDefinitions;
+
+/**
+ * Get metric definition by name for AST visualization
+ */
+export function getMetricDefinition(metricName: string): MetricDefinition | undefined {
+  return metricDefinitions.find((m) => m.name === metricName);
+}
+
+/**
+ * Get all metric definitions for AST visualization
+ */
+export function getAllMetricDefinitions(): MetricDefinition[] {
+  return [...metricDefinitions];
+}

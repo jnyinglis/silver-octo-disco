@@ -15,11 +15,15 @@ export {
   introspectSemanticModel,
   semanticMetricCatalog,
   semanticDimensionCatalog,
+  getMetricDefinition,
+  getAllMetricDefinitions,
   SemanticEngine,
   f,
   Expr,
   aggregateMetric,
   buildMetricFromExpr,
 } from './engine';
+
+export type { MetricDefinition, DimensionDefinition, SemanticIntrospection } from './engine';
 
 export type { QuerySpec, Row, InMemoryDb } from './engine';
