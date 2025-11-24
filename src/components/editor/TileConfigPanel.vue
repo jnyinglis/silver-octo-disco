@@ -34,52 +34,110 @@
         </div>
       </section>
 
-      <!-- Query Binding -->
+      <!-- Query Configuration -->
       <section class="config-panel__section">
-        <h4 class="config-panel__section-title">Query Binding</h4>
+        <h4 class="config-panel__section-title">Query Configuration</h4>
 
-        <MetricPicker
-          :model-value="selectedTile.query.metrics"
-          :recommended-metrics="currentTemplate?.recommendedMetrics ?? []"
-          @update:model-value="updateQuery('metrics', $event)"
-        />
-
-        <DimensionPicker
-          :model-value="selectedTile.query.dimensions ?? []"
-          :recommended-dimensions="currentTemplate?.recommendedDimensions ?? []"
-          @update:model-value="updateQuery('dimensions', $event)"
-        />
-
-        <!-- Transforms -->
+        <!-- Query Mode Switcher -->
         <div class="config-panel__field">
-          <label>Context Transforms</label>
-          <div class="config-panel__checkboxes">
-            <label
-              v-for="transform in availableTransforms"
-              :key="transform"
-              class="config-panel__checkbox"
+          <label>Query Mode</label>
+          <div class="config-panel__mode-switch">
+            <button
+              type="button"
+              class="config-panel__mode-btn"
+              :class="{ 'config-panel__mode-btn--active': currentQueryMode === 'builder' }"
+              @click="switchQueryMode('builder')"
             >
-              <input
-                type="checkbox"
-                :checked="(selectedTile.query.transforms ?? []).includes(transform)"
-                @change="toggleTransform(transform)"
-              />
-              {{ transform }}
-            </label>
+              Visual Builder
+            </button>
+            <button
+              type="button"
+              class="config-panel__mode-btn"
+              :class="{ 'config-panel__mode-btn--active': currentQueryMode === 'dsl' }"
+              @click="switchQueryMode('dsl')"
+            >
+              DSL Query
+            </button>
           </div>
         </div>
 
-        <!-- Limit -->
-        <div class="config-panel__field">
-          <label>Limit</label>
-          <input
-            type="number"
-            :value="selectedTile.query.limit"
-            placeholder="No limit"
-            min="1"
-            @input="updateQuery('limit', parseLimit(($event.target as HTMLInputElement).value))"
+        <!-- Visual Builder Mode -->
+        <template v-if="currentQueryMode === 'builder'">
+          <MetricPicker
+            :model-value="selectedTile.query?.metrics ?? []"
+            :recommended-metrics="currentTemplate?.recommendedMetrics ?? []"
+            @update:model-value="updateQuery('metrics', $event)"
           />
-        </div>
+
+          <DimensionPicker
+            :model-value="selectedTile.query?.dimensions ?? []"
+            :recommended-dimensions="currentTemplate?.recommendedDimensions ?? []"
+            @update:model-value="updateQuery('dimensions', $event)"
+          />
+
+          <!-- Transforms -->
+          <div class="config-panel__field">
+            <label>Context Transforms</label>
+            <div class="config-panel__checkboxes">
+              <label
+                v-for="transform in availableTransforms"
+                :key="transform"
+                class="config-panel__checkbox"
+              >
+                <input
+                  type="checkbox"
+                  :checked="(selectedTile.query?.transforms ?? []).includes(transform)"
+                  @change="toggleTransform(transform)"
+                />
+                {{ transform }}
+              </label>
+            </div>
+          </div>
+
+          <!-- Limit -->
+          <div class="config-panel__field">
+            <label>Limit</label>
+            <input
+              type="number"
+              :value="selectedTile.query?.limit"
+              placeholder="No limit"
+              min="1"
+              @input="updateQuery('limit', parseLimit(($event.target as HTMLInputElement).value))"
+            />
+          </div>
+        </template>
+
+        <!-- DSL Mode -->
+        <template v-else>
+          <div class="config-panel__field">
+            <label>Query DSL</label>
+            <textarea
+              class="config-panel__dsl-editor"
+              :value="selectedTile.dslConfig?.queryString ?? ''"
+              @input="updateDSLQuery(($event.target as HTMLTextAreaElement).value)"
+              placeholder="metrics: total_enrollments&#10;dimensions: department, status&#10;where: status == :status"
+              rows="8"
+            ></textarea>
+            <small class="config-panel__hint">
+              Query will be auto-wrapped in: query tile_{{ selectedTile.id }} { ... }
+            </small>
+          </div>
+
+          <!-- DSL Parameters -->
+          <div class="config-panel__field">
+            <label>Parameters (JSON)</label>
+            <textarea
+              class="config-panel__params-editor"
+              :value="dslParametersJson"
+              @input="updateDSLParameters(($event.target as HTMLTextAreaElement).value)"
+              placeholder='{ "status": "completed" }'
+              rows="3"
+            ></textarea>
+            <small class="config-panel__hint">
+              Values for :param placeholders in query
+            </small>
+          </div>
+        </template>
       </section>
 
       <!-- KPI Display Configuration (only for KPI tiles) -->
@@ -182,6 +240,28 @@
         </template>
       </section>
 
+      <!-- Applied Filters -->
+      <section class="config-panel__section">
+        <h4 class="config-panel__section-title">Applied Filters</h4>
+        <p class="config-panel__description">
+          Select which global dashboard filters should apply to this tile
+        </p>
+        <div class="config-panel__checkboxes">
+          <label
+            v-for="filterKey in availableFilters"
+            :key="filterKey"
+            class="config-panel__checkbox"
+          >
+            <input
+              type="checkbox"
+              :checked="(selectedTile.appliedFilters ?? []).includes(filterKey)"
+              @change="toggleAppliedFilter(filterKey)"
+            />
+            {{ formatFilterLabel(filterKey) }}
+          </label>
+        </div>
+      </section>
+
       <!-- Layout -->
       <section class="config-panel__section">
         <h4 class="config-panel__section-title">Layout</h4>
@@ -207,6 +287,90 @@
             />
           </div>
         </div>
+      </section>
+
+      <!-- Detail View (Drill-down) -->
+      <section class="config-panel__section">
+        <h4 class="config-panel__section-title">Detail View (Drill-down)</h4>
+
+        <div class="config-panel__field">
+          <label>
+            <input
+              type="checkbox"
+              :checked="!!selectedTile.detailView"
+              @change="toggleDetailView"
+            />
+            Enable drill-down on click
+          </label>
+        </div>
+
+        <template v-if="selectedTile.detailView">
+          <!-- Inherit Filters -->
+          <div class="config-panel__field">
+            <label>
+              <input
+                type="checkbox"
+                :checked="selectedTile.detailView.inheritFilters !== false"
+                @change="updateDetailView('inheritFilters', !selectedTile.detailView.inheritFilters)"
+              />
+              Inherit parent tile filters
+            </label>
+          </div>
+
+          <!-- Detail Query Mode -->
+          <div class="config-panel__field">
+            <label>Detail Query Mode</label>
+            <div class="config-panel__mode-switch">
+              <button
+                type="button"
+                class="config-panel__mode-btn"
+                :class="{ 'config-panel__mode-btn--active': detailQueryMode === 'builder' }"
+                @click="updateDetailView('mode', 'builder')"
+              >
+                Visual Builder
+              </button>
+              <button
+                type="button"
+                class="config-panel__mode-btn"
+                :class="{ 'config-panel__mode-btn--active': detailQueryMode === 'dsl' }"
+                @click="updateDetailView('mode', 'dsl')"
+              >
+                DSL Query
+              </button>
+            </div>
+          </div>
+
+          <!-- Builder Mode for Detail View -->
+          <template v-if="detailQueryMode === 'builder'">
+            <div class="config-panel__field">
+              <label>Columns (Dimensions)</label>
+              <textarea
+                class="config-panel__textarea"
+                :value="detailColumnsText"
+                @input="updateDetailColumns(($event.target as HTMLTextAreaElement).value)"
+                placeholder="userFullName&#10;department&#10;courseTitle&#10;score&#10;completedAt"
+                rows="5"
+              ></textarea>
+              <small class="config-panel__hint">
+                One dimension per line
+              </small>
+            </div>
+          </template>
+
+          <!-- DSL Mode for Detail View -->
+          <template v-else>
+            <div class="config-panel__field">
+              <label>Detail Query DSL</label>
+              <textarea
+                class="config-panel__dsl-editor"
+                :value="selectedTile.detailView.dslConfig?.queryString ?? ''"
+                @input="updateDetailDSL(($event.target as HTMLTextAreaElement).value)"
+                placeholder="dimensions: userFullName, department, courseTitle&#10;where: status == :status"
+                rows="6"
+              ></textarea>
+            </div>
+          </template>
+        </template>
       </section>
 
       <!-- Validation Errors -->
@@ -253,6 +417,31 @@ const tileErrors = computed(() => {
   return validation.value.errors.filter((e) =>
     e.includes(selectedTileId.value!)
   );
+});
+
+const currentQueryMode = computed(() => {
+  return selectedTile.value?.queryMode ?? 'builder';
+});
+
+const dslParametersJson = computed(() => {
+  const params = selectedTile.value?.dslConfig?.parameters;
+  if (!params || Object.keys(params).length === 0) return '';
+  return JSON.stringify(params, null, 2);
+});
+
+const availableFilters = computed(() => {
+  // Common dashboard filters
+  return ['department', 'status', 'courseCategory', 'search'];
+});
+
+const detailQueryMode = computed(() => {
+  return selectedTile.value?.detailView?.mode ?? 'builder';
+});
+
+const detailColumnsText = computed(() => {
+  const columns = selectedTile.value?.detailView?.builderConfig?.dimensions;
+  if (!columns || columns.length === 0) return '';
+  return columns.join('\n');
 });
 
 function updateField<K extends keyof TileConfig>(field: K, value: TileConfig[K]) {
@@ -318,7 +507,7 @@ function toggleSecondaryKPI() {
     });
   } else {
     // Add secondary KPI with second metric if available
-    const secondMetric = selectedTile.value.query.metrics[1];
+    const secondMetric = selectedTile.value.query?.metrics[1];
     updateTile(selectedTileId.value, {
       kpiDisplay: {
         ...currentKPI,
@@ -327,6 +516,120 @@ function toggleSecondaryKPI() {
       },
     });
   }
+}
+
+function switchQueryMode(mode: 'builder' | 'dsl') {
+  if (!selectedTileId.value) return;
+  updateTile(selectedTileId.value, { queryMode: mode });
+}
+
+function updateDSLQuery(queryString: string) {
+  if (!selectedTileId.value || !selectedTile.value) return;
+  const currentDSL = selectedTile.value.dslConfig ?? {};
+  updateTile(selectedTileId.value, {
+    dslConfig: { ...currentDSL, queryString },
+  });
+}
+
+function updateDSLParameters(jsonString: string) {
+  if (!selectedTileId.value || !selectedTile.value) return;
+  try {
+    const parameters = jsonString.trim() ? JSON.parse(jsonString) : {};
+    const currentDSL = selectedTile.value.dslConfig ?? { queryString: '' };
+    updateTile(selectedTileId.value, {
+      dslConfig: { ...currentDSL, parameters },
+    });
+  } catch (e) {
+    // Invalid JSON - ignore for now, user is still typing
+    console.warn('Invalid JSON parameters:', e);
+  }
+}
+
+function toggleAppliedFilter(filterKey: string) {
+  if (!selectedTileId.value || !selectedTile.value) return;
+  const current = selectedTile.value.appliedFilters ?? [];
+  const index = current.indexOf(filterKey);
+
+  if (index >= 0) {
+    updateTile(selectedTileId.value, {
+      appliedFilters: current.filter((f) => f !== filterKey),
+    });
+  } else {
+    updateTile(selectedTileId.value, {
+      appliedFilters: [...current, filterKey],
+    });
+  }
+}
+
+function formatFilterLabel(key: string): string {
+  // Convert camelCase to Title Case
+  return key
+    .replace(/([A-Z])/g, ' $1')
+    .replace(/^./, (str) => str.toUpperCase())
+    .trim();
+}
+
+function toggleDetailView() {
+  if (!selectedTileId.value || !selectedTile.value) return;
+
+  if (selectedTile.value.detailView) {
+    // Disable detail view
+    updateTile(selectedTileId.value, { detailView: undefined });
+  } else {
+    // Enable detail view with defaults
+    updateTile(selectedTileId.value, {
+      detailView: {
+        mode: 'builder',
+        inheritFilters: true,
+        builderConfig: {
+          metrics: [],
+          dimensions: [],
+        },
+      },
+    });
+  }
+}
+
+function updateDetailView<K extends keyof NonNullable<TileConfig['detailView']>>(
+  field: K,
+  value: NonNullable<TileConfig['detailView']>[K]
+) {
+  if (!selectedTileId.value || !selectedTile.value?.detailView) return;
+  const currentDetail = selectedTile.value.detailView;
+  updateTile(selectedTileId.value, {
+    detailView: { ...currentDetail, [field]: value },
+  });
+}
+
+function updateDetailColumns(text: string) {
+  if (!selectedTileId.value || !selectedTile.value?.detailView) return;
+  const dimensions = text
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+
+  const currentDetail = selectedTile.value.detailView;
+  updateTile(selectedTileId.value, {
+    detailView: {
+      ...currentDetail,
+      builderConfig: {
+        ...(currentDetail.builderConfig ?? {}),
+        metrics: [],
+        dimensions,
+      },
+    },
+  });
+}
+
+function updateDetailDSL(queryString: string) {
+  if (!selectedTileId.value || !selectedTile.value?.detailView) return;
+  const currentDetail = selectedTile.value.detailView;
+  updateTile(selectedTileId.value, {
+    detailView: {
+      ...currentDetail,
+      dslConfig: { queryString },
+    },
+  });
 }
 </script>
 
@@ -405,6 +708,13 @@ function toggleSecondaryKPI() {
   letter-spacing: 0.05em;
 }
 
+.config-panel__description {
+  margin: 0.5rem 0 0.75rem;
+  font-size: 0.75rem;
+  color: #6b7280;
+  line-height: 1.4;
+}
+
 .config-panel__field {
   display: flex;
   flex-direction: column;
@@ -462,5 +772,83 @@ function toggleSecondaryKPI() {
 
 .config-panel__errors li {
   margin-bottom: 0.25rem;
+}
+
+/* Query Mode Switcher */
+.config-panel__mode-switch {
+  display: flex;
+  background: #f3f4f6;
+  border-radius: 0.5rem;
+  padding: 0.25rem;
+  gap: 0.25rem;
+}
+
+.config-panel__mode-btn {
+  flex: 1;
+  padding: 0.5rem 0.75rem;
+  border: none;
+  background: transparent;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: #6b7280;
+  transition: all 0.15s;
+}
+
+.config-panel__mode-btn:hover {
+  color: #374151;
+}
+
+.config-panel__mode-btn--active {
+  background: white;
+  color: #1f2937;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* DSL Editor */
+.config-panel__dsl-editor,
+.config-panel__params-editor {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  font-family: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, 'DejaVu Sans Mono', monospace;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.config-panel__dsl-editor:focus,
+.config-panel__params-editor:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+.config-panel__hint {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.6875rem;
+  color: #9ca3af;
+  font-style: italic;
+}
+
+/* Textarea */
+.config-panel__textarea {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  font-family: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, 'DejaVu Sans Mono', monospace;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.config-panel__textarea:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
 }
 </style>

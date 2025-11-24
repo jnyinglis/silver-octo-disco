@@ -1,47 +1,74 @@
 <template>
   <div
     class="editor-canvas"
-    :class="`editor-canvas--${mode}`"
+    :class="{ 'editor-canvas--preview': mode === 'preview' }"
     :style="gridStyle"
-    @dragover.prevent="mode === 'edit' && onDragOver($event)"
-    @drop="mode === 'edit' ? onDrop($event) : undefined"
+    @dragover.prevent="mode === 'edit' ? onDragOver : undefined"
+    @drop="mode === 'edit' ? onDrop : undefined"
   >
-    <div
-      v-for="tile in dashboard.tiles"
-      :key="tile.id"
-      class="editor-canvas__tile"
-      :class="{
-        'editor-canvas__tile--selected': tile.id === selectedTileId,
-      }"
-      :style="getTileStyle(tile)"
-    >
+    <!-- Preview Mode: Use TileRenderer with Card styling -->
+    <template v-if="mode === 'preview'">
       <TileRenderer
+        v-for="tile in dashboard.tiles"
+        :key="tile.id"
         :tile="tile"
         :mode="mode"
-        :is-active="tile.id === selectedTileId"
+        :style="getTileStyle(tile)"
         @select="selectTile(tile.id)"
       />
+    </template>
 
-      <div v-if="mode === 'edit'" class="editor-canvas__tile-actions">
-        <button
-          class="editor-canvas__action"
-          title="Duplicate"
-          @click.stop="duplicateTile(tile.id)"
-        >
-          D
-        </button>
-        <button
-          class="editor-canvas__action editor-canvas__action--danger"
-          title="Delete"
-          @click.stop="deleteTile(tile.id)"
-        >
-          X
-        </button>
+    <!-- Edit Mode: Use simple tile display -->
+    <template v-else>
+      <div
+        v-for="tile in dashboard.tiles"
+        :key="tile.id"
+        class="editor-canvas__tile"
+        :class="{
+          'editor-canvas__tile--selected': tile.id === selectedTileId,
+        }"
+        :style="getTileStyle(tile)"
+        @click="selectTile(tile.id)"
+      >
+        <div class="editor-canvas__tile-header">
+          <span class="editor-canvas__tile-type">{{ tile.type }}</span>
+          <span class="editor-canvas__tile-title">{{ tile.title }}</span>
+        </div>
+        <div class="editor-canvas__tile-content">
+          <div class="editor-canvas__tile-metrics">
+            <span
+              v-for="metric in tile.query?.metrics ?? []"
+              :key="metric"
+              class="editor-canvas__metric-badge"
+            >
+              {{ metric }}
+            </span>
+          </div>
+          <div v-if="tile.query?.dimensions?.length" class="editor-canvas__tile-dimensions">
+            by {{ tile.query.dimensions.join(', ') }}
+          </div>
+        </div>
+        <div class="editor-canvas__tile-actions">
+          <button
+            class="editor-canvas__action"
+            title="Duplicate"
+            @click.stop="duplicateTile(tile.id)"
+          >
+            D
+          </button>
+          <button
+            class="editor-canvas__action editor-canvas__action--danger"
+            title="Delete"
+            @click.stop="deleteTile(tile.id)"
+          >
+            X
+          </button>
+        </div>
       </div>
-    </div>
+    </template>
 
     <div v-if="dashboard.tiles.length === 0" class="editor-canvas__empty">
-      <p>Drag tiles from the palette or click to add</p>
+      <p>{{ mode === 'preview' ? 'No tiles configured' : 'Drag tiles from the palette or click to add' }}</p>
     </div>
   </div>
 </template>
@@ -49,11 +76,20 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useSharedEditorState } from '@/composables/useEditorState';
+import TileRenderer from './TileRenderer.vue';
 import type { TileConfig } from '@/types/dashboardSchema';
 import type { CardTemplate } from '@/services/editorPalette';
 import TileRenderer from './TileRenderer.vue';
 
 const props = withDefaults(defineProps<{ mode?: 'edit' | 'preview' }>(), {
+  mode: 'edit',
+});
+
+interface Props {
+  mode?: 'edit' | 'preview';
+}
+
+const props = withDefaults(defineProps<Props>(), {
   mode: 'edit',
 });
 
@@ -107,10 +143,12 @@ function onDrop(event: DragEvent) {
   position: relative;
 }
 
+/* Preview mode styling - match dashboard view */
 .editor-canvas--preview {
-  background: transparent;
+  background: #f3f4f6;
   border: none;
-  padding: 0;
+  padding: 2rem;
+  border-radius: 0;
 }
 
 .editor-canvas__tile {

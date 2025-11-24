@@ -120,7 +120,6 @@
 
     <!-- Preview Mode -->
     <div class="editor-preview" v-else>
-      <p class="editor-preview__note">Preview mode - showing configured layout</p>
       <EditorCanvas mode="preview" />
     </div>
 
