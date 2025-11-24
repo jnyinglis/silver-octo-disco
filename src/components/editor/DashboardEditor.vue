@@ -87,7 +87,7 @@
 
       <!-- Center: Canvas -->
       <div class="editor-main__canvas">
-        <EditorCanvas />
+        <EditorCanvas mode="edit" />
       </div>
 
       <!-- Right: Config Panel + Preview/Plan -->
@@ -121,7 +121,7 @@
     <!-- Preview Mode -->
     <div class="editor-preview" v-else>
       <p class="editor-preview__note">Preview mode - showing configured layout</p>
-      <EditorCanvas />
+      <EditorCanvas mode="preview" />
     </div>
 
     <!-- Import Modal -->
