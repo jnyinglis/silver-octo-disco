@@ -78,6 +78,14 @@
       </span>
     </div>
 
+    <!-- Filter Status Banner (for preview) -->
+    <div v-if="mode === 'preview'" class="editor-filters">
+      <strong>Active Filters:</strong>
+      <span v-for="(value, key) in globalFilters" :key="key" class="editor-filters__item">
+        {{ key }}: <em>{{ value || '(empty)' }}</em>
+      </span>
+    </div>
+
     <!-- Main Content -->
     <div class="editor-main" v-if="mode === 'edit'">
       <!-- Left: Palette -->
@@ -163,6 +171,7 @@ const {
   exportJson,
   importJson: doImport,
   loadDraft,
+  globalFilters,
 } = useSharedEditorState();
 
 const mode = ref<'edit' | 'preview'>('edit');
@@ -337,6 +346,30 @@ function onPublish() {
   padding: 0.75rem 1.5rem;
   font-size: 0.875rem;
   border-bottom: 1px solid #fecaca;
+}
+
+.editor-filters {
+  background: #eff6ff;
+  color: #1e40af;
+  padding: 0.75rem 1.5rem;
+  font-size: 0.875rem;
+  border-bottom: 1px solid #bfdbfe;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.editor-filters__item {
+  background: white;
+  padding: 0.25rem 0.75rem;
+  border-radius: 0.375rem;
+  font-size: 0.8125rem;
+}
+
+.editor-filters__item em {
+  font-style: normal;
+  font-weight: 600;
 }
 
 .editor-main {

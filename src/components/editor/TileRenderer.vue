@@ -53,7 +53,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
+import { useSharedEditorState } from '@/composables/useEditorState';
+import { generateFakeDatabase } from '@/utils/fakeDataGenerator';
+import { createDashboardEngine } from '@/metricforge';
 import type { TileConfig } from '@/types/dashboardSchema';
 import type { Row } from '@/metricforge';
 
@@ -71,6 +74,64 @@ const props = withDefaults(defineProps<Props>(), {
 const emit = defineEmits<{
   (event: 'select'): void;
 }>();
+
+const { globalFilters } = useSharedEditorState();
+
+// Query execution for preview mode
+const executedData = ref<Row | undefined>(undefined);
+const sampleDb = generateFakeDatabase({ seed: 12345 });
+const engine = createDashboardEngine(sampleDb);
+
+// Execute query when tile changes (in preview mode)
+watch(
+  () => [props.tile, props.mode, globalFilters.value],
+  () => {
+    if (props.mode === 'preview' && props.tile.query?.metrics.length) {
+      executeQuery();
+    }
+  },
+  { immediate: true, deep: true }
+);
+
+function executeQuery() {
+  try {
+    const query = props.tile.query;
+    if (!query || !query.metrics.length) {
+      executedData.value = undefined;
+      return;
+    }
+
+    // Merge applied filters into where clause
+    const mergedWhere = { ...(query.where ?? {}) };
+
+    if (props.tile.appliedFilters) {
+      props.tile.appliedFilters.forEach((filterKey) => {
+        const filterValue = globalFilters.value[filterKey];
+        // Only inject if filter has a non-empty value and isn't 'all'
+        if (filterValue && filterValue !== 'all' && filterValue !== '') {
+          mergedWhere[filterKey] = filterValue;
+        }
+      });
+    }
+
+    const spec = {
+      metrics: query.metrics,
+      dimensions: query.dimensions,
+      where: mergedWhere,
+    };
+
+    const results = engine.runQuery(spec);
+    executedData.value = results[0]; // Use first row for KPI summary
+  } catch (e) {
+    console.error('Query execution failed:', e);
+    executedData.value = undefined;
+  }
+}
+
+// Use executed data if in preview mode, otherwise use prop
+const summaryData = computed(() => {
+  return props.mode === 'preview' ? executedData.value : props.summaryData;
+});
 
 // Filter badges (from appliedFilters)
 const filterBadges = computed(() => {

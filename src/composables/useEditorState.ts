@@ -31,6 +31,14 @@ export function useEditorState() {
   const selectedTileId = ref<string | null>(null);
   const isDirty = ref(false);
 
+  // Global filters (mock values for editor preview)
+  const globalFilters = ref<Record<string, unknown>>({
+    department: 'Engineering',
+    status: 'active',
+    courseCategory: 'Technical',
+    search: '',
+  });
+
   // History for undo/redo
   const history = shallowRef<string[]>([]);
   const historyIndex = ref(-1);
@@ -232,6 +240,7 @@ export function useEditorState() {
     selectedTile,
     isDirty,
     validation,
+    globalFilters,
 
     // Introspection data
     introspection,
