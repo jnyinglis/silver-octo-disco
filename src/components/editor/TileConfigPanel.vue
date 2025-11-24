@@ -82,6 +82,106 @@
         </div>
       </section>
 
+      <!-- KPI Display Configuration (only for KPI tiles) -->
+      <section v-if="selectedTile.type === 'kpi'" class="config-panel__section">
+        <h4 class="config-panel__section-title">KPI Display</h4>
+
+        <!-- Primary KPI -->
+        <div class="config-panel__field">
+          <label>Primary Metric</label>
+          <select
+            :value="selectedTile.kpiDisplay?.primaryMetric ?? selectedTile.query.metrics[0]"
+            @change="updateKPIDisplay('primaryMetric', ($event.target as HTMLSelectElement).value)"
+          >
+            <option value="">Select metric...</option>
+            <option
+              v-for="metric in selectedTile.query.metrics"
+              :key="metric"
+              :value="metric"
+            >
+              {{ metric }}
+            </option>
+          </select>
+        </div>
+
+        <div class="config-panel__field">
+          <label>Primary Label</label>
+          <input
+            type="text"
+            :value="selectedTile.kpiDisplay?.primaryLabel ?? ''"
+            placeholder="e.g., Total completions"
+            @input="updateKPIDisplay('primaryLabel', ($event.target as HTMLInputElement).value)"
+          />
+        </div>
+
+        <div class="config-panel__field">
+          <label>Primary Format</label>
+          <select
+            :value="selectedTile.kpiDisplay?.primaryFormat ?? 'number'"
+            @change="updateKPIDisplay('primaryFormat', ($event.target as HTMLSelectElement).value)"
+          >
+            <option value="number">Number</option>
+            <option value="percent">Percent</option>
+            <option value="hours">Hours</option>
+            <option value="score">Score</option>
+          </select>
+        </div>
+
+        <!-- Secondary KPI -->
+        <div class="config-panel__field">
+          <label>
+            <input
+              type="checkbox"
+              :checked="!!selectedTile.kpiDisplay?.secondaryMetric"
+              @change="toggleSecondaryKPI"
+            />
+            Show secondary metric (trend)
+          </label>
+        </div>
+
+        <template v-if="selectedTile.kpiDisplay?.secondaryMetric">
+          <div class="config-panel__field">
+            <label>Secondary Metric</label>
+            <select
+              :value="selectedTile.kpiDisplay.secondaryMetric"
+              @change="updateKPIDisplay('secondaryMetric', ($event.target as HTMLSelectElement).value)"
+            >
+              <option value="">Select metric...</option>
+              <option
+                v-for="metric in selectedTile.query.metrics"
+                :key="metric"
+                :value="metric"
+              >
+                {{ metric }}
+              </option>
+            </select>
+          </div>
+
+          <div class="config-panel__field">
+            <label>Secondary Label</label>
+            <input
+              type="text"
+              :value="selectedTile.kpiDisplay.secondaryLabel ?? ''"
+              placeholder="e.g., active learners"
+              @input="updateKPIDisplay('secondaryLabel', ($event.target as HTMLInputElement).value)"
+            />
+          </div>
+
+          <div class="config-panel__field">
+            <label>Secondary Format</label>
+            <select
+              :value="selectedTile.kpiDisplay.secondaryFormat ?? 'number'"
+              @change="updateKPIDisplay('secondaryFormat', ($event.target as HTMLSelectElement).value)"
+            >
+              <option value="number">Number</option>
+              <option value="percent">Percent</option>
+              <option value="hours">Hours</option>
+              <option value="score">Score</option>
+            </select>
+          </div>
+        </template>
+      </section>
+
       <!-- Layout -->
       <section class="config-panel__section">
         <h4 class="config-panel__section-title">Layout</h4>
@@ -189,6 +289,44 @@ function toggleTransform(transform: string) {
 function parseLimit(value: string): number | undefined {
   const num = parseInt(value);
   return isNaN(num) || num < 1 ? undefined : num;
+}
+
+function updateKPIDisplay<K extends keyof NonNullable<TileConfig['kpiDisplay']>>(
+  field: K,
+  value: NonNullable<TileConfig['kpiDisplay']>[K]
+) {
+  if (!selectedTileId.value || !selectedTile.value) return;
+  const currentKPI = selectedTile.value.kpiDisplay ?? {};
+  updateTile(selectedTileId.value, {
+    kpiDisplay: { ...currentKPI, [field]: value },
+  });
+}
+
+function toggleSecondaryKPI() {
+  if (!selectedTileId.value || !selectedTile.value) return;
+  const currentKPI = selectedTile.value.kpiDisplay ?? {};
+
+  if (currentKPI.secondaryMetric) {
+    // Remove secondary KPI
+    updateTile(selectedTileId.value, {
+      kpiDisplay: {
+        ...currentKPI,
+        secondaryMetric: undefined,
+        secondaryLabel: undefined,
+        secondaryFormat: undefined,
+      },
+    });
+  } else {
+    // Add secondary KPI with second metric if available
+    const secondMetric = selectedTile.value.query.metrics[1];
+    updateTile(selectedTileId.value, {
+      kpiDisplay: {
+        ...currentKPI,
+        secondaryMetric: secondMetric ?? '',
+        secondaryFormat: 'number',
+      },
+    });
+  }
 }
 </script>
 
