@@ -20,8 +20,11 @@
 
       <!-- KPI Preview -->
       <div v-else-if="selectedTile.type === 'kpi'" class="tile-preview__kpi">
-        <span class="tile-preview__kpi-value">{{ formatValue(previewData[0]) }}</span>
-        <span class="tile-preview__kpi-label">{{ selectedTile.query.metrics[0] }}</span>
+        <span class="tile-preview__kpi-value">{{ formatKPIValue(previewData[0], 'primary') }}</span>
+        <span class="tile-preview__kpi-label">{{ getKPILabel('primary') }}</span>
+        <span v-if="hasSecondaryKPI" class="tile-preview__kpi-trend">
+          {{ formatKPIValue(previewData[0], 'secondary') }} {{ getKPILabel('secondary') }}
+        </span>
       </div>
 
       <!-- Table Preview -->
@@ -81,6 +84,10 @@ const previewData = ref<Row[]>([]);
 const previewColumns = computed(() => {
   if (!previewData.value.length) return [];
   return Object.keys(previewData.value[0]);
+});
+
+const hasSecondaryKPI = computed(() => {
+  return !!selectedTile.value?.kpiDisplay?.secondaryMetric;
 });
 
 // Use sample data for preview
@@ -144,6 +151,51 @@ function formatValue(row: Row | undefined): string {
     return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
   }
   return String(value ?? '—');
+}
+
+function getKPILabel(type: 'primary' | 'secondary'): string {
+  if (!selectedTile.value) return '';
+  const kpiDisplay = selectedTile.value.kpiDisplay;
+
+  if (type === 'primary') {
+    return kpiDisplay?.primaryLabel ?? selectedTile.value.query.metrics[0] ?? '';
+  } else {
+    return kpiDisplay?.secondaryLabel ?? kpiDisplay?.secondaryMetric ?? '';
+  }
+}
+
+function formatKPIValue(row: Row | undefined, type: 'primary' | 'secondary'): string {
+  if (!row || !selectedTile.value) return '—';
+
+  const kpiDisplay = selectedTile.value.kpiDisplay;
+  const metricName = type === 'primary'
+    ? (kpiDisplay?.primaryMetric ?? selectedTile.value.query.metrics[0])
+    : kpiDisplay?.secondaryMetric;
+
+  if (!metricName) return '—';
+
+  const value = row[metricName];
+  if (typeof value !== 'number') return String(value ?? '—');
+
+  const format = type === 'primary'
+    ? (kpiDisplay?.primaryFormat ?? 'number')
+    : (kpiDisplay?.secondaryFormat ?? 'number');
+
+  return formatByType(value, format);
+}
+
+function formatByType(value: number, format: string): string {
+  switch (format) {
+    case 'percent':
+      return `${(value * 100).toFixed(1)}%`;
+    case 'hours':
+      return `${value.toFixed(1)}h`;
+    case 'score':
+      return value.toFixed(0);
+    case 'number':
+    default:
+      return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  }
 }
 
 function formatCell(value: unknown): string {
@@ -251,6 +303,13 @@ function getBarLabel(row: Row): string {
   font-size: 0.75rem;
   color: #6b7280;
   margin-top: 0.25rem;
+}
+
+.tile-preview__kpi-trend {
+  font-size: 0.85rem;
+  color: #059669;
+  font-weight: 600;
+  margin-top: 0.5rem;
 }
 
 .tile-preview__table-wrapper {
