@@ -87,11 +87,6 @@ import TileRenderer from './TileRenderer.vue';
 import DetailViewModal from './DetailViewModal.vue';
 import type { TileConfig } from '@/types/dashboardSchema';
 import type { CardTemplate } from '@/services/editorPalette';
-import TileRenderer from './TileRenderer.vue';
-
-const props = withDefaults(defineProps<{ mode?: 'edit' | 'preview' }>(), {
-  mode: 'edit',
-});
 
 interface Props {
   mode?: 'edit' | 'preview';
