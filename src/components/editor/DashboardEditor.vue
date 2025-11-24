@@ -87,7 +87,7 @@
 
       <!-- Center: Canvas -->
       <div class="editor-main__canvas">
-        <EditorCanvas />
+        <EditorCanvas mode="edit" />
       </div>
 
       <!-- Right: Config Panel + Preview/Plan -->
