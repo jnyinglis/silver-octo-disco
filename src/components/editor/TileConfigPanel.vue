@@ -486,8 +486,14 @@ function updateKPIDisplay<K extends keyof NonNullable<TileConfig['kpiDisplay']>>
 ) {
   if (!selectedTileId.value || !selectedTile.value) return;
   const currentKPI = selectedTile.value.kpiDisplay ?? {};
+  const fallbackPrimary = currentKPI.primaryMetric ?? selectedTile.value.query?.metrics?.[0];
+
   updateTile(selectedTileId.value, {
-    kpiDisplay: { ...currentKPI, [field]: value },
+    kpiDisplay: {
+      ...currentKPI,
+      primaryMetric: fallbackPrimary,
+      [field]: value,
+    },
   });
 }
 
