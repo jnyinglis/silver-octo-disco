@@ -25,36 +25,20 @@
       @close="closeDetailView"
     />
 
-    <!-- Edit Mode: Use simple tile display -->
+    <!-- Edit Mode: Use TileRenderer with actions -->
     <template v-else>
       <div
         v-for="tile in dashboard.tiles"
         :key="tile.id"
-        class="editor-canvas__tile"
-        :class="{
-          'editor-canvas__tile--selected': tile.id === selectedTileId,
-        }"
+        class="editor-canvas__tile-wrapper"
         :style="getTileStyle(tile)"
-        @click="selectTile(tile.id)"
       >
-        <div class="editor-canvas__tile-header">
-          <span class="editor-canvas__tile-type">{{ tile.type }}</span>
-          <span class="editor-canvas__tile-title">{{ tile.title }}</span>
-        </div>
-        <div class="editor-canvas__tile-content">
-          <div class="editor-canvas__tile-metrics">
-            <span
-              v-for="metric in tile.query?.metrics ?? []"
-              :key="metric"
-              class="editor-canvas__metric-badge"
-            >
-              {{ metric }}
-            </span>
-          </div>
-          <div v-if="tile.query?.dimensions?.length" class="editor-canvas__tile-dimensions">
-            by {{ tile.query.dimensions.join(', ') }}
-          </div>
-        </div>
+        <TileRenderer
+          :tile="tile"
+          :mode="mode"
+          :is-active="tile.id === selectedTileId"
+          @select="selectTile(tile.id)"
+        />
         <div class="editor-canvas__tile-actions">
           <button
             class="editor-canvas__action"
@@ -169,7 +153,7 @@ function onDrop(event: DragEvent) {
   border-radius: 0;
 }
 
-.editor-canvas__tile {
+.editor-canvas__tile-wrapper {
   position: relative;
   display: flex;
   width: 100%;
@@ -184,9 +168,10 @@ function onDrop(event: DragEvent) {
   gap: 0.25rem;
   opacity: 0;
   transition: opacity 0.15s ease;
+  z-index: 10;
 }
 
-.editor-canvas__tile:hover .editor-canvas__tile-actions {
+.editor-canvas__tile-wrapper:hover .editor-canvas__tile-actions {
   opacity: 1;
 }
 
