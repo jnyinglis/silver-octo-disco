@@ -59,6 +59,7 @@ import { generateFakeDatabase } from '@/utils/fakeDataGenerator';
 import { createDashboardEngine } from '@/metricforge';
 import type { TileConfig } from '@/types/dashboardSchema';
 import type { Row } from '@/metricforge';
+import { buildBuilderQuery, buildDSLQuery } from '@/utils/querySpecBuilder';
 
 interface Props {
   tile: TileConfig;
@@ -86,7 +87,7 @@ const engine = createDashboardEngine(sampleDb);
 watch(
   () => [props.tile, props.mode, globalFilters.value],
   () => {
-    if (props.mode === 'preview' && props.tile.query?.metrics.length) {
+    if (props.mode === 'preview') {
       executeQuery();
     }
   },
@@ -95,32 +96,17 @@ watch(
 
 function executeQuery() {
   try {
-    const query = props.tile.query;
-    if (!query || !query.metrics.length) {
+    const queryBuilder =
+      props.tile.queryMode === 'dsl'
+        ? buildDSLQuery(props.tile.dslConfig, props.tile.appliedFilters, globalFilters.value)
+        : buildBuilderQuery(props.tile.query, props.tile.appliedFilters, globalFilters.value);
+
+    if (!queryBuilder) {
       executedData.value = undefined;
       return;
     }
 
-    // Merge applied filters into where clause
-    const mergedWhere = { ...(query.where ?? {}) };
-
-    if (props.tile.appliedFilters) {
-      props.tile.appliedFilters.forEach((filterKey) => {
-        const filterValue = globalFilters.value[filterKey];
-        // Only inject if filter has a non-empty value and isn't 'all'
-        if (filterValue && filterValue !== 'all' && filterValue !== '') {
-          mergedWhere[filterKey] = filterValue;
-        }
-      });
-    }
-
-    const spec = {
-      metrics: query.metrics,
-      dimensions: query.dimensions,
-      where: mergedWhere,
-    };
-
-    const results = engine.runQuery(spec);
+    const results = engine.runQuery(queryBuilder.spec);
     executedData.value = results[0]; // Use first row for KPI summary
   } catch (e) {
     console.error('Query execution failed:', e);
@@ -152,12 +138,12 @@ const primaryLabel = computed(() => {
 });
 
 const formattedPrimaryValue = computed(() => {
-  if (!props.summaryData || !props.tile.kpiDisplay) return '—';
+  if (!summaryData.value || !props.tile.kpiDisplay) return '—';
 
   const metricName = props.tile.kpiDisplay.primaryMetric ?? props.tile.query?.metrics[0];
   if (!metricName) return '—';
 
-  const value = props.summaryData[metricName];
+  const value = summaryData.value[metricName];
   if (typeof value !== 'number') return String(value ?? '—');
 
   return formatByType(value, props.tile.kpiDisplay.primaryFormat ?? 'number');
@@ -170,10 +156,10 @@ const secondaryLabel = computed(() => {
 });
 
 const formattedSecondaryValue = computed(() => {
-  if (!props.summaryData || !props.tile.kpiDisplay?.secondaryMetric) return '';
+  if (!summaryData.value || !props.tile.kpiDisplay?.secondaryMetric) return '';
 
   const metricName = props.tile.kpiDisplay.secondaryMetric;
-  const value = props.summaryData[metricName];
+  const value = summaryData.value[metricName];
   if (typeof value !== 'number') return '';
 
   return formatByType(value, props.tile.kpiDisplay.secondaryFormat ?? 'number');

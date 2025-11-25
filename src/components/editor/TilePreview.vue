@@ -14,7 +14,7 @@
         {{ error }}
       </div>
 
-      <div v-else-if="!selectedTile.query.metrics.length" class="tile-preview__empty">
+      <div v-else-if="!hasConfiguredQuery" class="tile-preview__empty">
         Select at least one metric to see preview
       </div>
 
@@ -74,6 +74,7 @@ import { useSharedEditorState } from '@/composables/useEditorState';
 import { generateFakeDatabase } from '@/utils/fakeDataGenerator';
 import { createDashboardEngine } from '@/metricforge';
 import type { Row } from 'metricforge/src/semanticEngine';
+import { buildBuilderQuery, buildDSLQuery } from '@/utils/querySpecBuilder';
 
 const { selectedTile, globalFilters } = useSharedEditorState();
 
@@ -90,6 +91,16 @@ const hasSecondaryKPI = computed(() => {
   return !!selectedTile.value?.kpiDisplay?.secondaryMetric;
 });
 
+const hasConfiguredQuery = computed(() => {
+  if (!selectedTile.value) return false;
+
+  if (selectedTile.value.queryMode === 'dsl') {
+    return !!selectedTile.value.dslConfig?.queryString;
+  }
+
+  return !!selectedTile.value.query?.metrics.length;
+});
+
 // Use sample data for preview
 const sampleDb = generateFakeDatabase({ seed: 12345 });
 const engine = createDashboardEngine(sampleDb);
@@ -104,36 +115,21 @@ async function refresh() {
     // Small delay to show loading state
     await new Promise((r) => setTimeout(r, 100));
 
-    const query = selectedTile.value.query;
-    if (!query.metrics.length) {
+    const queryBuilder =
+      selectedTile.value.queryMode === 'dsl'
+        ? buildDSLQuery(selectedTile.value.dslConfig, selectedTile.value.appliedFilters, globalFilters.value)
+        : buildBuilderQuery(selectedTile.value.query, selectedTile.value.appliedFilters, globalFilters.value);
+
+    if (!queryBuilder) {
       previewData.value = [];
       return;
     }
 
-    // Merge applied filters into where clause
-    const mergedWhere = { ...(query.where ?? {}) };
-
-    if (selectedTile.value.appliedFilters) {
-      selectedTile.value.appliedFilters.forEach((filterKey) => {
-        const filterValue = globalFilters.value[filterKey];
-        // Only inject if filter has a non-empty value and isn't 'all'
-        if (filterValue && filterValue !== 'all' && filterValue !== '') {
-          mergedWhere[filterKey] = filterValue;
-        }
-      });
-    }
-
-    const spec = {
-      metrics: query.metrics,
-      dimensions: query.dimensions,
-      where: mergedWhere,
-    };
-
-    let results = engine.runQuery(spec);
+    let results = engine.runQuery(queryBuilder.spec);
 
     // Apply limit
-    if (query.limit && results.length > query.limit) {
-      results = results.slice(0, query.limit);
+    if (queryBuilder.limit && results.length > queryBuilder.limit) {
+      results = results.slice(0, queryBuilder.limit);
     }
 
     previewData.value = results;
@@ -148,7 +144,10 @@ async function refresh() {
 // Debounced refresh on tile changes
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 watch(
-  () => selectedTile.value ? JSON.stringify(selectedTile.value.query) : null,
+  () =>
+    selectedTile.value
+      ? `${selectedTile.value.queryMode}-${JSON.stringify(selectedTile.value.query)}-${JSON.stringify(selectedTile.value.dslConfig)}`
+      : null,
   () => {
     if (debounceTimer) clearTimeout(debounceTimer);
     debounceTimer = setTimeout(refresh, 300);
@@ -158,7 +157,10 @@ watch(
 
 function formatValue(row: Row | undefined): string {
   if (!row || !selectedTile.value) return '—';
-  const metric = selectedTile.value.query.metrics[0];
+  const metric =
+    selectedTile.value.kpiDisplay?.primaryMetric ||
+    selectedTile.value.query.metrics[0] ||
+    Object.keys(row)[0];
   const value = row[metric];
   if (typeof value === 'number') {
     return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
@@ -221,7 +223,7 @@ function formatCell(value: unknown): string {
 
 function getBarHeight(row: Row): string {
   if (!selectedTile.value) return '10%';
-  const metric = selectedTile.value.query.metrics[0];
+  const metric = selectedTile.value.query.metrics[0] || Object.keys(row)[1] || Object.keys(row)[0];
   const value = row[metric];
   if (typeof value !== 'number') return '10%';
 
@@ -234,8 +236,7 @@ function getBarHeight(row: Row): string {
 }
 
 function getBarLabel(row: Row): string {
-  if (!selectedTile.value?.query.dimensions?.length) return '';
-  const dim = selectedTile.value.query.dimensions[0];
+  const dim = selectedTile.value?.query.dimensions?.[0] || Object.keys(row)[0];
   const val = row[dim];
   return String(val ?? '').slice(0, 10);
 }
