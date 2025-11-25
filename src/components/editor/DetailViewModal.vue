@@ -62,6 +62,7 @@ import { generateFakeDatabase } from '@/utils/fakeDataGenerator';
 import { createDashboardEngine } from '@/metricforge';
 import type { TileConfig } from '@/types/dashboardSchema';
 import type { Row } from '@/metricforge';
+import { buildBuilderQuery, buildDSLQuery } from '@/utils/querySpecBuilder';
 
 interface Props {
   tile: TileConfig;
@@ -141,42 +142,29 @@ async function executeDetailQuery() {
       return;
     }
 
-    // For now, we only support builder mode
-    // DSL mode would require parsing and executing DSL queries
-    if (detailView.mode === 'dsl') {
-      error.value = 'DSL mode not yet implemented for detail view';
-      return;
-    }
+    const builder =
+      detailView.mode === 'dsl'
+        ? buildDSLQuery(
+            detailView.dslConfig,
+            detailView.inheritFilters ? props.tile.appliedFilters : undefined,
+            globalFilters.value
+          )
+        : buildBuilderQuery(
+            detailView.builderConfig,
+            detailView.inheritFilters ? props.tile.appliedFilters : undefined,
+            globalFilters.value
+          );
 
-    const query = detailView.builderConfig;
-    if (!query || !query.metrics.length) {
+    if (!builder) {
       error.value = 'No metrics configured for detail view';
       return;
     }
 
-    // Build where clause with inherited filters
-    const mergedWhere = { ...(query.where ?? {}) };
-
-    if (detailView.inheritFilters && props.tile.appliedFilters) {
-      props.tile.appliedFilters.forEach((filterKey) => {
-        const filterValue = globalFilters.value[filterKey];
-        if (filterValue && filterValue !== 'all' && filterValue !== '') {
-          mergedWhere[filterKey] = filterValue;
-        }
-      });
-    }
-
-    const spec = {
-      metrics: query.metrics,
-      dimensions: query.dimensions,
-      where: mergedWhere,
-    };
-
-    const results = engine.runQuery(spec);
+    const results = engine.runQuery(builder.spec);
 
     // Apply limit if specified
-    if (query.limit && results.length > query.limit) {
-      detailData.value = results.slice(0, query.limit);
+    if (builder.limit && results.length > builder.limit) {
+      detailData.value = results.slice(0, builder.limit);
     } else {
       detailData.value = results;
     }
