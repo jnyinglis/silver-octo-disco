@@ -9,7 +9,7 @@
     <!-- Preview Mode: Use TileRenderer with Card styling -->
     <template v-if="mode === 'preview'">
       <TileRenderer
-        v-for="tile in dashboard.tiles"
+        v-for="tile in uniqueTiles"
         :key="tile.id"
         :tile="tile"
         :mode="mode"
@@ -18,17 +18,10 @@
       />
     </template>
 
-    <!-- Detail View Modal -->
-    <DetailViewModal
-      v-if="detailViewTile"
-      :tile="detailViewTile"
-      @close="closeDetailView"
-    />
-
     <!-- Edit Mode: Use TileRenderer with actions -->
-    <template v-else>
+    <template v-else-if="mode === 'edit'">
       <div
-        v-for="tile in dashboard.tiles"
+        v-for="tile in uniqueTiles"
         :key="tile.id"
         class="editor-canvas__tile-wrapper"
         :style="getTileStyle(tile)"
@@ -58,9 +51,17 @@
       </div>
     </template>
 
-    <div v-if="dashboard.tiles.length === 0" class="editor-canvas__empty">
+    <!-- Empty state -->
+    <div v-if="uniqueTiles.length === 0" class="editor-canvas__empty">
       <p>{{ mode === 'preview' ? 'No tiles configured' : 'Drag tiles from the palette or click to add' }}</p>
     </div>
+
+    <!-- Detail View Modal (outside of mode conditionals) -->
+    <DetailViewModal
+      v-if="detailViewTile"
+      :tile="detailViewTile"
+      @close="closeDetailView"
+    />
   </div>
 </template>
 
@@ -89,6 +90,19 @@ const {
   duplicateTile,
   palette,
 } = useSharedEditorState();
+
+// Deduplicate tiles by ID to prevent rendering duplicates
+const uniqueTiles = computed(() => {
+  const seen = new Set<string>();
+  return dashboard.value.tiles.filter((tile) => {
+    if (seen.has(tile.id)) {
+      console.warn('Duplicate tile ID detected:', tile.id);
+      return false;
+    }
+    seen.add(tile.id);
+    return true;
+  });
+});
 
 // Detail view modal state
 const detailViewTile = ref<TileConfig | null>(null);
@@ -155,7 +169,6 @@ function onDrop(event: DragEvent) {
 
 .editor-canvas__tile-wrapper {
   position: relative;
-  display: flex;
   width: 100%;
   min-height: 100px;
 }

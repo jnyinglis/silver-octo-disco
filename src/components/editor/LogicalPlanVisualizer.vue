@@ -176,7 +176,8 @@ function collapseAll() {
   box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
   display: flex;
   flex-direction: column;
-  max-height: 400px;
+  flex: 1;
+  min-height: 200px;
   overflow: hidden;
 }
 

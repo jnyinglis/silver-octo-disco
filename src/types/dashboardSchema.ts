@@ -185,8 +185,9 @@ export function validateDashboardConfig(
 
     // Validate KPI display
     if (tile.type === 'kpi' && tile.kpiDisplay) {
-      if (!tile.kpiDisplay.primaryMetric) {
-        errors.push(`Tile ${tile.id} is a KPI tile but has no primaryMetric configured`);
+      // primaryMetric is optional if there's at least one metric in query.metrics to fall back to
+      if (!tile.kpiDisplay.primaryMetric && (!tile.query?.metrics || tile.query.metrics.length === 0)) {
+        errors.push(`Tile ${tile.id} is a KPI tile but has no primaryMetric configured and no metrics in query`);
       }
     }
 

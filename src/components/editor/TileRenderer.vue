@@ -19,7 +19,7 @@
     </header>
 
     <!-- KPI Display -->
-    <div v-if="tile.type === 'kpi' && summaryData" class="tile-card__summary">
+    <div v-if="tile.type === 'kpi'" class="tile-card__summary">
       <span class="tile-card__value">{{ formattedPrimaryValue }}</span>
       <span class="tile-card__label">{{ primaryLabel }}</span>
       <span v-if="formattedSecondaryValue" class="tile-card__trend">
@@ -27,14 +27,48 @@
       </span>
     </div>
 
-    <!-- Other tile types (placeholder for now) -->
+    <!-- Table Display -->
+    <div v-else-if="tile.type === 'table' && previewResults.length > 0" class="tile-card__table">
+      <table class="tile-table">
+        <thead>
+          <tr>
+            <th v-for="col in previewColumns" :key="col">{{ col }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="(row, idx) in previewResults.slice(0, 5)" :key="idx">
+            <td v-for="col in previewColumns" :key="col">{{ formatCellValue(row[col]) }}</td>
+          </tr>
+        </tbody>
+      </table>
+      <p v-if="previewResults.length > 5" class="tile-table__more">
+        +{{ previewResults.length - 5 }} more rows
+      </p>
+    </div>
+
+    <!-- Chart Display (line and bar types) -->
+    <div v-else-if="(tile.type === 'line' || tile.type === 'bar') && previewResults.length > 0" class="tile-card__chart">
+      <div class="tile-chart__bars">
+        <div
+          v-for="(row, idx) in previewResults.slice(0, 6)"
+          :key="idx"
+          class="tile-chart__bar"
+          :style="{ height: getBarHeight(row) }"
+        >
+          <span class="tile-chart__label">{{ getBarLabel(row, idx) }}</span>
+        </div>
+      </div>
+      <p class="tile-chart__note">{{ previewResults.length }} data points</p>
+    </div>
+
+    <!-- No data placeholder -->
     <div v-else class="tile-card__summary">
-      <span class="tile-card__label">{{ tile.type }} preview</span>
+      <span class="tile-card__label">{{ tile.type === 'kpi' ? 'No data' : `${tile.type} (${previewResults.length} rows)` }}</span>
     </div>
   </article>
 
   <!-- Edit mode: simple tile display -->
-  <div v-else class="tile-editor" :class="{ 'tile-editor--active': isActive }">
+  <div v-else class="tile-editor" :class="{ 'tile-editor--active': isActive }" @click="emit('select')">
     <div class="tile-editor__header">
       <span class="tile-editor__type">{{ tile.type }}</span>
       <span class="tile-editor__title">{{ tile.title }}</span>
@@ -80,6 +114,7 @@ const { globalFilters } = useSharedEditorState();
 
 // Query execution for preview mode
 const executedData = ref<Row | undefined>(undefined);
+const executedResults = ref<Row[]>([]);
 const sampleDb = generateFakeDatabase({ seed: 12345 });
 const engine = createDashboardEngine(sampleDb);
 
@@ -103,20 +138,34 @@ function executeQuery() {
 
     if (!queryBuilder) {
       executedData.value = undefined;
+      executedResults.value = [];
       return;
     }
 
     const results = engine.runQuery(queryBuilder.spec);
     executedData.value = results[0]; // Use first row for KPI summary
+    executedResults.value = results; // Store all results for table/chart
   } catch (e) {
     console.error('Query execution failed:', e);
     executedData.value = undefined;
+    executedResults.value = [];
   }
 }
 
 // Use executed data if in preview mode, otherwise use prop
 const summaryData = computed(() => {
   return props.mode === 'preview' ? executedData.value : props.summaryData;
+});
+
+// Preview results for table/chart display
+const previewResults = computed(() => {
+  return props.mode === 'preview' ? executedResults.value : [];
+});
+
+// Column names from preview results
+const previewColumns = computed(() => {
+  if (!previewResults.value.length) return [];
+  return Object.keys(previewResults.value[0]);
 });
 
 // Filter badges (from appliedFilters)
@@ -138,15 +187,16 @@ const primaryLabel = computed(() => {
 });
 
 const formattedPrimaryValue = computed(() => {
-  if (!summaryData.value || !props.tile.kpiDisplay) return '—';
+  if (!summaryData.value) return '—';
 
-  const metricName = props.tile.kpiDisplay.primaryMetric ?? props.tile.query?.metrics[0];
+  // Fallback to first metric if kpiDisplay is not configured
+  const metricName = props.tile.kpiDisplay?.primaryMetric ?? props.tile.query?.metrics[0];
   if (!metricName) return '—';
 
   const value = summaryData.value[metricName];
   if (typeof value !== 'number') return String(value ?? '—');
 
-  return formatByType(value, props.tile.kpiDisplay.primaryFormat ?? 'number');
+  return formatByType(value, props.tile.kpiDisplay?.primaryFormat ?? 'number');
 });
 
 // Secondary KPI
@@ -177,6 +227,39 @@ function formatByType(value: number, format: string): string {
     default:
       return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
   }
+}
+
+// Format cell values for table display
+function formatCellValue(value: unknown): string {
+  if (value === null || value === undefined) return '—';
+  if (typeof value === 'number') {
+    return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  }
+  return String(value);
+}
+
+// Get bar height for chart display
+function getBarHeight(row: Row): string {
+  if (!props.tile.query?.metrics?.[0]) return '10%';
+  const metric = props.tile.query.metrics[0];
+  const value = row[metric];
+  if (typeof value !== 'number') return '10%';
+
+  const maxVal = Math.max(
+    ...previewResults.value
+      .slice(0, 6)
+      .map((r) => (typeof r[metric] === 'number' ? r[metric] as number : 0))
+  );
+  return `${Math.max(10, (value / maxVal) * 100)}%`;
+}
+
+// Get label for chart bars
+function getBarLabel(row: Row, idx: number): string {
+  const dim = props.tile.query?.dimensions?.[0];
+  if (dim && row[dim] !== undefined) {
+    return String(row[dim]).slice(0, 12);
+  }
+  return `#${idx + 1}`;
 }
 </script>
 
@@ -264,6 +347,90 @@ function formatByType(value: number, format: string): string {
   color: #059669;
   font-size: 0.85rem;
   font-weight: 600;
+}
+
+/* Table Display */
+.tile-card__table {
+  overflow-x: auto;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.tile-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.tile-table th,
+.tile-table td {
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.tile-table th {
+  font-weight: 600;
+  color: #374151;
+  background: #f9fafb;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.tile-table td {
+  color: #4b5563;
+}
+
+.tile-table tbody tr:hover {
+  background: #f9fafb;
+}
+
+.tile-table__more {
+  margin: 0.5rem 0 0;
+  font-size: 0.75rem;
+  color: #9ca3af;
+  text-align: center;
+}
+
+/* Chart Display */
+.tile-card__chart {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+}
+
+.tile-chart__bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.25rem;
+  height: 100px;
+}
+
+.tile-chart__bar {
+  flex: 1;
+  background: linear-gradient(to top, #3b82f6, #60a5fa);
+  border-radius: 0.25rem 0.25rem 0 0;
+  position: relative;
+  min-width: 20px;
+}
+
+.tile-chart__label {
+  position: absolute;
+  bottom: -1.25rem;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.625rem;
+  color: #6b7280;
+  white-space: nowrap;
+}
+
+.tile-chart__note {
+  margin: 1rem 0 0;
+  font-size: 0.75rem;
+  color: #9ca3af;
+  text-align: center;
 }
 
 /* Edit Mode - Simple tile display */

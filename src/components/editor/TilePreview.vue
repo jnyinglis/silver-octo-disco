@@ -248,6 +248,10 @@ function getBarLabel(row: Row): string {
   border-radius: 0.75rem;
   box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 200px;
 }
 
 .tile-preview__header {
@@ -281,6 +285,8 @@ function getBarLabel(row: Row): string {
 
 .tile-preview__content {
   padding: 1rem;
+  flex: 1;
+  overflow-y: auto;
   min-height: 120px;
 }
 

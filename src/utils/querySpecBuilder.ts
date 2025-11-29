@@ -12,7 +12,14 @@ export function buildBuilderQuery(
   appliedFilters: string[] | undefined,
   globalFilters: Record<string, unknown>
 ): QueryBuildResult | null {
-  if (!query || !query.metrics.length) {
+  if (!query) {
+    return null;
+  }
+
+  // Both metrics and dimensions are optional, but at least one is required
+  const hasMetrics = query.metrics && query.metrics.length > 0;
+  const hasDimensions = query.dimensions && query.dimensions.length > 0;
+  if (!hasMetrics && !hasDimensions) {
     return null;
   }
 
@@ -28,8 +35,8 @@ export function buildBuilderQuery(
   }
 
   const spec: QuerySpec = {
-    metrics: query.metrics,
-    dimensions: query.dimensions,
+    metrics: query.metrics ?? [],
+    dimensions: query.dimensions ?? [],
   };
 
   if (Object.keys(mergedWhere).length > 0) {
@@ -50,15 +57,17 @@ export function buildDSLQuery(
   const source = substituteParams(config.queryString, params);
 
   const metrics = extractList(source, 'metrics');
-  if (!metrics.length) return null;
+  const dimensions = extractList(source, 'dimensions') ?? [];
 
-  const dimensions = extractList(source, 'dimensions');
+  // Both metrics and dimensions are optional, but at least one is required
+  if (!metrics.length && !dimensions.length) return null;
+
   const where = parseWhereClause(extractSection(source, 'where'));
   const limit = parseLimit(source);
 
   const spec: QuerySpec = {
-    metrics,
-    dimensions,
+    metrics: metrics.length > 0 ? metrics : [],
+    dimensions: dimensions.length > 0 ? dimensions : [],
   };
 
   if (Object.keys(where).length > 0) {
