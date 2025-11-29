@@ -7,6 +7,18 @@ export type QueryMode = 'builder' | 'dsl';
 
 export type MetricFormat = 'number' | 'percent' | 'hours' | 'score';
 
+export type FilterType = 'select' | 'text' | 'number' | 'date';
+
+// Filter definition for dashboard-level filters
+export interface FilterDefinition {
+  key: string;                    // Unique identifier (e.g., "department")
+  label: string;                  // Display label (e.g., "Department")
+  type: FilterType;               // Filter input type
+  options?: string[];             // Options for select type
+  defaultValue?: unknown;         // Default value
+  required?: boolean;             // Whether filter is required
+}
+
 // Legacy query binding (visual builder)
 export interface QueryBinding {
   fact?: string;
@@ -118,6 +130,7 @@ export interface DashboardConfig {
 
   // Data and filters
   filters?: DashboardFilters;
+  availableFilters?: FilterDefinition[];  // Configurable filters for this dashboard
   layout?: { columns?: number; gutter?: number };
   tiles: TileConfig[];
 }

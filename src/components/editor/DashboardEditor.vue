@@ -91,6 +91,7 @@
       <!-- Left: Palette -->
       <div class="editor-main__palette">
         <TilePalette />
+        <FilterConfigPanel />
       </div>
 
       <!-- Center: Canvas -->
@@ -153,6 +154,7 @@
 import { ref } from 'vue';
 import { useSharedEditorState, resetEditorInstance } from '@/composables/useEditorState';
 import TilePalette from './TilePalette.vue';
+import FilterConfigPanel from './FilterConfigPanel.vue';
 import EditorCanvas from './EditorCanvas.vue';
 import TileConfigPanel from './TileConfigPanel.vue';
 import TilePreview from './TilePreview.vue';
@@ -383,6 +385,9 @@ function onPublish() {
 
 .editor-main__palette {
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
 }
 
 .editor-main__canvas {

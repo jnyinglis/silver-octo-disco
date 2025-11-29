@@ -21,10 +21,17 @@
     <!-- Edit Mode: Use TileRenderer with actions -->
     <template v-else-if="mode === 'edit'">
       <div
-        v-for="tile in uniqueTiles"
+        v-for="(tile, index) in uniqueTiles"
         :key="tile.id"
         class="editor-canvas__tile-wrapper"
+        :class="{ 'editor-canvas__tile-wrapper--dragging': draggedTileId === tile.id, 'editor-canvas__tile-wrapper--drag-over': dragOverIndex === index }"
         :style="getTileStyle(tile)"
+        draggable="true"
+        @dragstart="onTileDragStart(tile.id, index, $event)"
+        @dragend="onTileDragEnd"
+        @dragover.prevent="onTileDragOver(index, $event)"
+        @dragleave="onTileDragLeave"
+        @drop="onTileDrop(index, $event)"
       >
         <TileRenderer
           :tile="tile"
@@ -88,6 +95,7 @@ const {
   addTile,
   deleteTile,
   duplicateTile,
+  reorderTiles,
   palette,
 } = useSharedEditorState();
 
@@ -106,6 +114,11 @@ const uniqueTiles = computed(() => {
 
 // Detail view modal state
 const detailViewTile = ref<TileConfig | null>(null);
+
+// Drag & drop state for tile repositioning
+const draggedTileId = ref<string | null>(null);
+const draggedFromIndex = ref<number | null>(null);
+const dragOverIndex = ref<number | null>(null);
 
 function handleTileClick(tile: TileConfig) {
   if (props.mode === 'preview' && tile.detailView) {
@@ -146,6 +159,46 @@ function onDrop(event: DragEvent) {
     console.error('Failed to parse dropped tile:', e);
   }
 }
+
+// Tile drag & drop handlers for repositioning
+function onTileDragStart(tileId: string, index: number, event: DragEvent) {
+  draggedTileId.value = tileId;
+  draggedFromIndex.value = index;
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', tileId);
+  }
+}
+
+function onTileDragEnd() {
+  draggedTileId.value = null;
+  draggedFromIndex.value = null;
+  dragOverIndex.value = null;
+}
+
+function onTileDragOver(index: number, event: DragEvent) {
+  if (draggedFromIndex.value === null) return;
+  dragOverIndex.value = index;
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = 'move';
+  }
+}
+
+function onTileDragLeave() {
+  dragOverIndex.value = null;
+}
+
+function onTileDrop(toIndex: number, event: DragEvent) {
+  event.preventDefault();
+
+  if (draggedFromIndex.value === null || draggedFromIndex.value === toIndex) {
+    onTileDragEnd();
+    return;
+  }
+
+  reorderTiles(draggedFromIndex.value, toIndex);
+  onTileDragEnd();
+}
 </script>
 
 <style scoped>
@@ -171,6 +224,18 @@ function onDrop(event: DragEvent) {
   position: relative;
   width: 100%;
   min-height: 100px;
+  cursor: move;
+  transition: all 0.2s ease;
+}
+
+.editor-canvas__tile-wrapper--dragging {
+  opacity: 0.4;
+  cursor: grabbing;
+}
+
+.editor-canvas__tile-wrapper--drag-over {
+  border: 2px dashed #3b82f6;
+  background: rgba(59, 130, 246, 0.05);
 }
 
 .editor-canvas__tile-actions {

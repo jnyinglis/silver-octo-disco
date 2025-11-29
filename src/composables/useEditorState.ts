@@ -31,12 +31,15 @@ export function useEditorState() {
   const selectedTileId = ref<string | null>(null);
   const isDirty = ref(false);
 
-  // Global filters (mock values for editor preview)
-  const globalFilters = ref<Record<string, unknown>>({
-    department: 'Engineering',
-    status: 'active',
-    courseCategory: 'Technical',
-    search: '',
+  // Global filters - computed from dashboard's availableFilters configuration
+  const globalFilters = computed(() => {
+    const filters: Record<string, unknown> = {};
+    if (dashboard.value.availableFilters) {
+      dashboard.value.availableFilters.forEach((filter) => {
+        filters[filter.key] = filter.defaultValue ?? '';
+      });
+    }
+    return filters;
   });
 
   // History for undo/redo
